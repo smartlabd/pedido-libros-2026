@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel de Pedidos 2026</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0;}
+  :root{
+    --navy:#1a2744;--navy-light:#243359;--gold:#c8922a;--gold-light:#fdf3e0;
+    --cream:#f8f7f4;--white:#fff;
+    --gray-100:#f3f4f6;--gray-200:#e5e7eb;--gray-400:#9ca3af;--gray-600:#4b5563;--gray-800:#1f2937;
+    --green:#16a34a;--green-light:#dcfce7;--red:#dc2626;--red-light:#fee2e2;
+    --blue:#2563eb;--blue-light:#dbeafe;
+  }
+  body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--gray-800);min-height:100vh;}
+
+  /* LOGIN */
+  #login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;}
+  .login-card{background:white;border-radius:16px;padding:40px 36px;width:100%;max-width:380px;box-shadow:0 8px 32px rgba(0,0,0,0.12);text-align:center;}
+  .login-card .logo{font-size:32px;margin-bottom:12px;}
+  .login-card h1{font-size:20px;font-weight:700;color:var(--navy);margin-bottom:4px;}
+  .login-card p{font-size:13px;color:var(--gray-400);margin-bottom:28px;}
+  .login-card input{width:100%;padding:12px 14px;border:1.5px solid var(--gray-200);border-radius:10px;font-size:15px;font-family:inherit;margin-bottom:12px;background:var(--gray-100);}
+  .login-card input:focus{outline:none;border-color:var(--navy);background:white;}
+  .login-card input.error{border-color:var(--red);}
+  .btn-login{width:100%;padding:13px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;transition:background 0.15s;}
+  .btn-login:hover{background:var(--navy-light);}
+  .login-error{font-size:13px;color:var(--red);margin-top:10px;display:none;}
+
+  /* MAIN PANEL */
+  #panel{display:none;}
+
+  /* TOP NAV */
+  nav{background:var(--navy);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;z-index:100;}
+  nav .nav-brand{display:flex;align-items:center;gap:10px;color:white;}
+  nav .nav-brand span{font-size:15px;font-weight:700;}
+  nav .nav-brand .dot{width:8px;height:8px;background:var(--gold);border-radius:50%;}
+  nav .nav-actions{display:flex;align-items:center;gap:12px;}
+  .btn-refresh{padding:7px 14px;background:rgba(255,255,255,0.1);color:white;border:1px solid rgba(255,255,255,0.2);border-radius:8px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;transition:background 0.15s;display:flex;align-items:center;gap:6px;}
+  .btn-refresh:hover{background:rgba(255,255,255,0.2);}
+  .btn-refresh .icon{font-size:14px;}
+  .last-update{font-size:11px;color:rgba(255,255,255,0.4);}
+
+  /* CONTENT */
+  .content{max-width:1100px;margin:0 auto;padding:28px 20px 60px;}
+
+  /* KPI ROW */
+  .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px;}
+  @media(max-width:700px){.kpi-row{grid-template-columns:1fr 1fr;}}
+  .kpi{background:white;border-radius:12px;padding:18px 20px;border:1px solid var(--gray-200);box-shadow:0 1px 3px rgba(0,0,0,0.05);}
+  .kpi .kpi-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--gray-400);margin-bottom:8px;}
+  .kpi .kpi-value{font-size:28px;font-weight:800;color:var(--navy);letter-spacing:-0.03em;line-height:1;}
+  .kpi .kpi-sub{font-size:12px;color:var(--gray-400);margin-top:4px;}
+  .kpi.accent{background:var(--navy);}
+  .kpi.accent .kpi-label{color:rgba(255,255,255,0.5);}
+  .kpi.accent .kpi-value{color:var(--gold);}
+  .kpi.accent .kpi-sub{color:rgba(255,255,255,0.4);}
+
+  /* TABS */
+  .tabs{display:flex;gap:4px;margin-bottom:20px;background:var(--gray-100);padding:4px;border-radius:10px;width:fit-content;}
+  .tab{padding:8px 18px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;border:none;font-family:inherit;background:transparent;color:var(--gray-600);transition:all 0.15s;}
+  .tab.active{background:white;color:var(--navy);box-shadow:0 1px 3px rgba(0,0,0,0.1);}
+
+  /* SECTION TITLES */
+  .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+  .section-title{font-size:15px;font-weight:700;color:var(--navy);}
+  .section-count{font-size:12px;color:var(--gray-400);background:var(--gray-100);padding:3px 10px;border-radius:20px;}
+
+  /* SEARCH */
+  .search-bar{position:relative;margin-bottom:16px;}
+  .search-bar input{width:100%;padding:10px 14px 10px 36px;border:1.5px solid var(--gray-200);border-radius:10px;font-size:14px;font-family:inherit;background:white;}
+  .search-bar input:focus{outline:none;border-color:var(--navy);}
+  .search-bar .icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--gray-400);}
+
+  /* FAMILIAS TABLE */
+  #tab-familias,#tab-libros{display:none;}
+  #tab-familias.active,#tab-libros.active{display:block;}
+
+  .familia-card{background:white;border:1px solid var(--gray-200);border-radius:12px;margin-bottom:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04);}
+  .familia-header{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:12px;padding:14px 18px;cursor:pointer;user-select:none;}
+  .familia-header:hover{background:var(--gray-100);}
+  .familia-header.open{background:var(--navy);color:white;}
+  .familia-name{font-size:15px;font-weight:600;}
+  .familia-tel{font-size:12px;color:var(--gray-400);margin-top:2px;}
+  .familia-header.open .familia-tel{color:rgba(255,255,255,0.5);}
+  .familia-total{font-size:16px;font-weight:700;color:var(--gold);white-space:nowrap;}
+  .familia-chevron{font-size:11px;color:var(--gray-400);transition:transform 0.2s;}
+  .familia-header.open .familia-chevron{transform:rotate(180deg);color:rgba(255,255,255,0.5);}
+  .familia-body{display:none;border-top:1px solid var(--gray-200);}
+  .familia-body.open{display:block;}
+  .familia-item{display:grid;grid-template-columns:1fr 60px 60px 70px;gap:8px;align-items:center;padding:9px 18px;border-bottom:1px solid var(--gray-100);font-size:13px;}
+  .familia-item:last-child{border-bottom:none;}
+  .familia-item .item-grade{font-size:11px;color:var(--gray-400);}
+  .familia-item .item-qty,.familia-item .item-price,.familia-item .item-sub{text-align:right;font-weight:600;color:var(--navy);}
+  .familia-item .item-price{font-weight:400;color:var(--gray-600);}
+  .familia-item-header{display:grid;grid-template-columns:1fr 60px 60px 70px;gap:8px;padding:7px 18px;background:var(--gray-100);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--gray-400);}
+  .familia-item-header span:not(:first-child){text-align:right;}
+
+  /* LIBROS TABLE */
+  .libros-table{background:white;border-radius:12px;border:1px solid var(--gray-200);overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04);}
+  .libros-thead{display:grid;grid-template-columns:80px 90px 1fr 80px 90px;gap:8px;padding:10px 16px;background:var(--navy);color:rgba(255,255,255,0.7);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.07em;}
+  .libros-thead span:nth-child(4),.libros-thead span:nth-child(5){text-align:right;}
+  .libro-row{display:grid;grid-template-columns:80px 90px 1fr 80px 90px;gap:8px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--gray-100);font-size:13px;transition:background 0.1s;}
+  .libro-row:last-child{border-bottom:none;}
+  .libro-row:hover{background:var(--gray-100);}
+  .libro-row.hot{background:var(--gold-light);}
+  .libro-ref{font-family:monospace;font-size:11px;color:var(--gray-400);}
+  .libro-grade{font-size:12px;color:var(--gray-600);}
+  .libro-desc{font-weight:500;}
+  .libro-qty{text-align:right;font-weight:700;color:var(--navy);}
+  .libro-total{text-align:right;font-weight:700;color:var(--navy);}
+  .qty-badge{display:inline-block;background:var(--navy);color:white;font-size:12px;font-weight:700;padding:2px 8px;border-radius:20px;}
+  .qty-badge.high{background:var(--gold);}
+
+  /* GRADE FILTER */
+  .grade-filters{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}
+  .grade-pill{padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid var(--gray-200);background:white;color:var(--gray-600);transition:all 0.15s;}
+  .grade-pill.active{background:var(--navy);color:white;border-color:var(--navy);}
+
+  /* EMPTY / LOADING STATES */
+  .state-box{text-align:center;padding:60px 24px;color:var(--gray-400);}
+  .state-box .state-icon{font-size:40px;margin-bottom:12px;}
+  .state-box p{font-size:14px;}
+  .spinner-inline{display:inline-block;width:20px;height:20px;border:2px solid var(--gray-200);border-top-color:var(--navy);border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:8px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* RESPONSIVE */
+  @media(max-width:600px){
+    .libros-thead,.libro-row{grid-template-columns:1fr 60px 70px;}
+    .libros-thead span:nth-child(1),.libros-thead span:nth-child(2),
+    .libro-ref,.libro-grade{display:none;}
+    .familia-item,.familia-item-header{grid-template-columns:1fr 50px 70px;}
+    .familia-item .item-price,.familia-item-header span:nth-child(3){display:none;}
+  }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="logo">📚</div>
+    <h1>Panel de Pedidos</h1>
+    <p>Catálogo Escolar 2026</p>
+    <input type="password" id="pwd-input" placeholder="Contraseña" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="btn-login" onclick="doLogin()">Ingresar</button>
+    <div class="login-error" id="login-error">Contraseña incorrecta o error de conexión.</div>
+  </div>
+</div>
+
+<!-- MAIN PANEL -->
+<div id="panel">
+  <nav>
+    <div class="nav-brand">
+      <div class="dot"></div>
+      <span>Panel de Pedidos 2026</span>
+    </div>
+    <div class="nav-actions">
+      <span class="last-update" id="last-update"></span>
+      <button class="btn-refresh" onclick="loadData()">
+        <span class="icon" id="refresh-icon">↻</span> Actualizar
+      </button>
+    </div>
+  </nav>
+
+  <div class="content">
+
+    <!-- KPIs -->
+    <div class="kpi-row">
+      <div class="kpi accent">
+        <div class="kpi-label">Total Global</div>
+        <div class="kpi-value" id="kpi-total">$0</div>
+        <div class="kpi-sub">USD acumulado</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Familias</div>
+        <div class="kpi-value" id="kpi-familias">0</div>
+        <div class="kpi-sub">con pedido enviado</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Títulos pedidos</div>
+        <div class="kpi-value" id="kpi-titulos">0</div>
+        <div class="kpi-sub">libros distintos</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Unidades totales</div>
+        <div class="kpi-value" id="kpi-unidades">0</div>
+        <div class="kpi-sub">ejemplares a pedir</div>
+      </div>
+    </div>
+
+    <!-- TABS -->
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('familias')">👨‍👩‍👧 Por familia</button>
+      <button class="tab" onclick="switchTab('libros')">📦 Por libro</button>
+    </div>
+
+    <!-- TAB: FAMILIAS -->
+    <div id="tab-familias" class="active">
+      <div class="section-header">
+        <div class="section-title">Pedidos por familia</div>
+        <div class="section-count" id="count-familias">0 familias</div>
+      </div>
+      <div class="search-bar">
+        <span class="icon">🔍</span>
+        <input type="text" id="search-familias" placeholder="Buscar familia…" oninput="renderFamilias()">
+      </div>
+      <div id="familias-list">
+        <div class="state-box"><div class="state-icon">⏳</div><p>Cargando pedidos…</p></div>
+      </div>
+    </div>
+
+    <!-- TAB: LIBROS -->
+    <div id="tab-libros">
+      <div class="section-header">
+        <div class="section-title">Consolidado por libro</div>
+        <div class="section-count" id="count-libros">0 títulos</div>
+      </div>
+      <div class="grade-filters" id="grade-filters"></div>
+      <div class="search-bar">
+        <span class="icon">🔍</span>
+        <input type="text" id="search-libros" placeholder="Buscar libro…" oninput="renderLibros()">
+      </div>
+      <div id="libros-list">
+        <div class="state-box"><div class="state-icon">⏳</div><p>Cargando libros…</p></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── CONFIG ────────────────────────────────────────────────────
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwOIp9IVoyaWA_GdChcoMDJwtFGI8nLhkKE1s9igWFafl4Fk89E99iBZRkoM45kNJrd/exec';
+
+// ── STATE ─────────────────────────────────────────────────────
+let allData = null;
+let activeGrade = 'Todos';
+let claveAdmin = '';
+
+// ── LOGIN ─────────────────────────────────────────────────────
+async function doLogin() {
+  const pwd = document.getElementById('pwd-input').value.trim();
+  if (!pwd) return;
+  claveAdmin = pwd;
+
+  const btn = document.querySelector('.btn-login');
+  btn.textContent = 'Verificando…';
+  btn.disabled = true;
+  document.getElementById('login-error').style.display = 'none';
+
+  try {
+    const url = APPS_SCRIPT_URL + '?action=ping';
+    const r = await fetch(url);
+    const d = await r.json();
+    if (d.ok) {
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('panel').style.display = 'block';
+      loadData();
+    } else {
+      throw new Error(d.error || 'Error');
+    }
+  } catch(err) {
+    document.getElementById('login-error').style.display = 'block';
+    document.getElementById('login-error').textContent = 'No se pudo conectar al servidor. Verifica la URL del Apps Script.';
+    btn.textContent = 'Ingresar';
+    btn.disabled = false;
+  }
+}
+
+// ── LOAD DATA ─────────────────────────────────────────────────
+async function loadData() {
+  const icon = document.getElementById('refresh-icon');
+  icon.style.animation = 'spin 0.8s linear infinite';
+
+  try {
+    const url = APPS_SCRIPT_URL + '?action=getOrders&clave=' + encodeURIComponent(claveAdmin);
+    const r = await fetch(url);
+    const d = await r.json();
+
+    if (!d.ok) {
+      if (d.error === 'Acceso no autorizado') {
+        alert('Contraseña incorrecta.');
+        document.getElementById('login-screen').style.display = 'flex';
+        document.getElementById('panel').style.display = 'none';
+      } else {
+        alert('Error al cargar: ' + d.error);
+      }
+      return;
+    }
+
+    allData = d;
+    renderAll();
+    document.getElementById('last-update').textContent =
+      'Actualizado: ' + new Date().toLocaleTimeString('es-VE');
+  } catch(err) {
+    alert('Error de conexión: ' + err.message);
+  } finally {
+    icon.style.animation = '';
+  }
+}
+
+// ── RENDER ALL ────────────────────────────────────────────────
+function renderAll() {
+  if (!allData) return;
+  const { familias, libros, totalGlobal } = allData;
+
+  // KPIs
+  const totalUnidades = libros.reduce((s,l) => s + l.qty, 0);
+  document.getElementById('kpi-total').textContent = '$' + totalGlobal.toFixed(2);
+  document.getElementById('kpi-familias').textContent = familias.length;
+  document.getElementById('kpi-titulos').textContent = libros.length;
+  document.getElementById('kpi-unidades').textContent = totalUnidades;
+
+  // Grade filter pills
+  const grades = ['Todos', ...new Set(libros.map(l => l.grade))];
+  document.getElementById('grade-filters').innerHTML = grades.map(g =>
+    `<button class="grade-pill ${g === activeGrade ? 'active' : ''}" onclick="setGrade('${g}')">${g}</button>`
+  ).join('');
+
+  renderFamilias();
+  renderLibros();
+}
+
+function setGrade(grade) {
+  activeGrade = grade;
+  document.querySelectorAll('.grade-pill').forEach(p => p.classList.toggle('active', p.textContent === grade));
+  renderLibros();
+}
+
+// ── RENDER FAMILIAS ───────────────────────────────────────────
+function renderFamilias() {
+  if (!allData) return;
+  const q = document.getElementById('search-familias').value.toLowerCase();
+  const list = allData.familias.filter(f =>
+    f.nombre.toLowerCase().includes(q) || f.telefono.toLowerCase().includes(q)
+  );
+
+  document.getElementById('count-familias').textContent = list.length + ' ' + (list.length === 1 ? 'familia' : 'familias');
+
+  if (list.length === 0) {
+    document.getElementById('familias-list').innerHTML =
+      `<div class="state-box"><div class="state-icon">🔍</div><p>No se encontraron familias.</p></div>`;
+    return;
+  }
+
+  document.getElementById('familias-list').innerHTML = list.map((f, i) => {
+    const items = f.libros.map(l => `
+      <div class="familia-item">
+        <div><div>${l.desc}</div><div class="item-grade">${l.grado}</div></div>
+        <div class="item-qty">${l.qty}</div>
+        <div class="item-price">$${l.usd.toFixed(2)}</div>
+        <div class="item-sub">$${l.subtotal.toFixed(2)}</div>
+      </div>`).join('');
+
+    return `
+      <div class="familia-card">
+        <div class="familia-header" id="fh-${i}" onclick="toggleFamilia(${i})">
+          <div>
+            <div class="familia-name">${f.nombre}</div>
+            <div class="familia-tel">${f.telefono} · ${f.fecha || ''}</div>
+          </div>
+          <div class="familia-total">$${f.total.toFixed(2)}</div>
+          <div class="familia-chevron">▼</div>
+        </div>
+        <div class="familia-body" id="fb-${i}">
+          <div class="familia-item-header"><span>Libro</span><span>Cant.</span><span>Precio</span><span>Subtotal</span></div>
+          ${items}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function toggleFamilia(i) {
+  const h = document.getElementById('fh-' + i);
+  const b = document.getElementById('fb-' + i);
+  h.classList.toggle('open');
+  b.classList.toggle('open');
+}
+
+// ── RENDER LIBROS ─────────────────────────────────────────────
+function renderLibros() {
+  if (!allData) return;
+  const q = document.getElementById('search-libros').value.toLowerCase();
+  const maxQty = Math.max(...allData.libros.map(l => l.qty), 1);
+
+  const list = allData.libros.filter(l => {
+    const gradeOk = activeGrade === 'Todos' || l.grade === activeGrade;
+    const searchOk = l.desc.toLowerCase().includes(q) || l.ref.toLowerCase().includes(q);
+    return gradeOk && searchOk;
+  });
+
+  document.getElementById('count-libros').textContent = list.length + ' títulos';
+
+  if (list.length === 0) {
+    document.getElementById('libros-list').innerHTML =
+      `<div class="state-box"><div class="state-icon">🔍</div><p>No se encontraron libros.</p></div>`;
+    return;
+  }
+
+  const rows = list.map(l => {
+    const isHot = l.qty >= maxQty * 0.6;
+    return `
+      <div class="libro-row ${isHot ? 'hot' : ''}">
+        <div class="libro-ref">${l.ref}</div>
+        <div class="libro-grade">${l.grade}</div>
+        <div class="libro-desc">${l.desc}</div>
+        <div class="libro-qty"><span class="qty-badge ${isHot ? 'high' : ''}">${l.qty}</span></div>
+        <div class="libro-total">$${l.total.toFixed(2)}</div>
+      </div>`;
+  }).join('');
+
+  document.getElementById('libros-list').innerHTML = `
+    <div class="libros-table">
+      <div class="libros-thead">
+        <span>Ref</span><span>Grado</span><span>Descripción</span><span style="text-align:right">Cant.</span><span style="text-align:right">Total USD</span>
+      </div>
+      ${rows}
+    </div>`;
+}
+
+// ── TABS ──────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['familias','libros'][i] === tab));
+  document.getElementById('tab-familias').classList.toggle('active', tab === 'familias');
+  document.getElementById('tab-libros').classList.toggle('active', tab === 'libros');
+}
+
+// Enter on password field
+document.getElementById('pwd-input').addEventListener('keydown', e => { if(e.key === 'Enter') doLogin(); });
+</script>
+</body>
+</html>

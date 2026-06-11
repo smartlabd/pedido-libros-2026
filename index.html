@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pedido de Libros 2026</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --navy: #1a2744; --gold: #c8922a; --gold-light: #fdf3e0;
+    --cream: #faf8f4; --gray-100: #f3f4f6; --gray-200: #e5e7eb;
+    --gray-400: #9ca3af; --gray-600: #4b5563; --gray-800: #1f2937;
+    --green: #16a34a; --red: #dc2626;
+  }
+  body { font-family: 'Inter', sans-serif; background: var(--cream); color: var(--gray-800); min-height: 100vh; }
+
+  /* HEADER */
+  header { background: var(--navy); color: white; padding: 28px 24px 24px; text-align: center; }
+  header .eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; }
+  header h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 4px; }
+  header p { font-size: 14px; color: rgba(255,255,255,0.6); }
+
+  /* STICKY TOTAL BAR */
+  #total-bar { position: sticky; top: 0; z-index: 100; background: var(--navy); border-bottom: 2px solid var(--gold); padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }
+  #total-bar .label { font-size: 12px; color: rgba(255,255,255,0.6); font-weight: 500; }
+  #total-bar .amount { font-size: 22px; font-weight: 700; color: var(--gold); letter-spacing: -0.02em; }
+  #total-bar .items-count { font-size: 12px; color: rgba(255,255,255,0.5); }
+
+  /* MAIN */
+  main { max-width: 720px; margin: 0 auto; padding: 24px 16px 120px; }
+
+  /* FAMILY INFO */
+  .info-card { background: white; border-radius: 12px; padding: 20px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid var(--gray-200); }
+  .info-card h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gray-400); margin-bottom: 16px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  @media(max-width: 560px) { .form-row { grid-template-columns: 1fr; } .form-row-3 { grid-template-columns: 1fr; } }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+
+  /* PHONE CODE DROPDOWN */
+  .phone-row { display: grid; grid-template-columns: 160px 1fr; gap: 10px; }
+  @media(max-width:560px){ .phone-row { grid-template-columns: 1fr; } }
+  .code-wrapper { position: relative; }
+  .code-selector { width: 100%; padding: 10px 12px; border: 1.5px solid var(--gray-200); border-radius: 8px; font-size: 14px; font-family: inherit; background: var(--gray-100); cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 6px; user-select: none; transition: border-color 0.15s; }
+  .code-selector:focus, .code-selector.open { outline: none; border-color: var(--navy); background: white; }
+  .code-selector.error { border-color: var(--red); }
+  .code-selector .flag { font-size: 18px; }
+  .code-selector .code-val { font-weight: 600; color: var(--navy); flex: 1; }
+  .code-selector .arrow { font-size: 9px; color: var(--gray-400); transition: transform 0.2s; }
+  .code-selector.open .arrow { transform: rotate(180deg); }
+  .code-dropdown { display: none; position: absolute; top: calc(100% + 4px); left: 0; width: 280px; background: white; border: 1.5px solid var(--gray-200); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); z-index: 200; overflow: hidden; }
+  .code-dropdown.open { display: block; }
+  .code-search { padding: 10px 12px; border-bottom: 1px solid var(--gray-200); }
+  .code-search input { width: 100%; border: 1.5px solid var(--gray-200); border-radius: 7px; padding: 7px 10px; font-size: 13px; font-family: inherit; background: var(--gray-100); }
+  .code-search input:focus { outline: none; border-color: var(--navy); background: white; }
+  .code-list { max-height: 200px; overflow-y: auto; }
+  .code-option { display: flex; align-items: center; gap: 10px; padding: 9px 14px; cursor: pointer; font-size: 13px; transition: background 0.1s; }
+  .code-option:hover { background: var(--gray-100); }
+  .code-option.selected { background: var(--gold-light); }
+  .code-option .opt-flag { font-size: 18px; flex-shrink: 0; }
+  .code-option .opt-country { flex: 1; color: var(--gray-800); }
+  .code-option .opt-code { font-weight: 600; color: var(--navy); }
+  .code-divider { height: 1px; background: var(--gray-200); margin: 4px 0; }
+  .form-group label { font-size: 13px; font-weight: 500; color: var(--gray-600); }
+  .form-group input { padding: 10px 12px; border: 1.5px solid var(--gray-200); border-radius: 8px; font-size: 15px; font-family: inherit; transition: border-color 0.15s; background: var(--gray-100); }
+  .form-group input:focus { outline: none; border-color: var(--navy); background: white; }
+  .form-group input.error { border-color: var(--red); }
+
+  /* GRADE SECTIONS */
+  .grade-section { margin-bottom: 12px; }
+  .grade-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--navy); color: white; border-radius: 10px 10px 0 0; cursor: pointer; user-select: none; }
+  .grade-section.collapsed .grade-header { border-radius: 10px; }
+  .grade-header h3 { font-size: 14px; font-weight: 600; }
+  .grade-header .grade-meta { display: flex; align-items: center; gap: 12px; }
+  .grade-header .grade-subtotal { font-size: 13px; font-weight: 700; color: var(--gold); min-width: 64px; text-align: right; }
+  .grade-header .chevron { font-size: 10px; transition: transform 0.2s; color: rgba(255,255,255,0.4); }
+  .grade-section.collapsed .chevron { transform: rotate(-90deg); }
+  .grade-body { background: white; border: 1px solid var(--gray-200); border-top: none; border-radius: 0 0 10px 10px; overflow: hidden; }
+  .grade-section.collapsed .grade-body { display: none; }
+
+  /* BOOK ROWS — 4 columns: desc | unit price | qty | subtotal */
+  .book-row { display: grid; grid-template-columns: 1fr 68px 68px 76px; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--gray-100); transition: background 0.1s; }
+  .book-row:last-child { border-bottom: none; }
+  .book-row:hover { background: var(--gray-100); }
+  .book-row.has-qty { background: var(--gold-light); }
+  .book-row.has-qty:hover { background: #fae9c4; }
+
+  .book-desc { font-size: 13px; font-weight: 500; color: var(--gray-800); line-height: 1.4; }
+  .book-ref { font-size: 11px; color: var(--gray-400); margin-top: 2px; font-family: monospace; }
+  .book-unit-price { font-size: 12px; color: var(--gray-600); text-align: right; }
+  .book-unit-price .price-label { font-size: 10px; color: var(--gray-400); display: block; }
+
+  .qty-input { width: 100%; padding: 7px 4px; border: 1.5px solid var(--gray-200); border-radius: 7px; font-size: 15px; font-family: inherit; font-weight: 600; text-align: center; color: var(--navy); background: var(--gray-100); transition: border-color 0.15s, background 0.15s; }
+  .qty-input:focus { outline: none; border-color: var(--gold); background: white; }
+
+  .book-subtotal { font-size: 13px; font-weight: 700; color: var(--navy); text-align: right; min-height: 18px; }
+  .book-subtotal:empty::before { content: '—'; color: var(--gray-300); font-weight: 400; font-size: 12px; }
+
+  /* COLUMN HEADERS */
+  .book-row-header { display: grid; grid-template-columns: 1fr 68px 68px 76px; gap: 8px; padding: 6px 14px; background: var(--gray-100); border-bottom: 1px solid var(--gray-200); }
+  .book-row-header span { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--gray-400); }
+  .book-row-header span:not(:first-child) { text-align: right; }
+
+  /* SUBMIT FOOTER */
+  .submit-section { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid var(--gray-200); padding: 14px 20px; box-shadow: 0 -4px 20px rgba(0,0,0,0.08); }
+  .submit-inner { max-width: 720px; margin: 0 auto; display: flex; gap: 12px; align-items: center; }
+  .submit-summary { flex: 1; }
+  .submit-summary .total-label { font-size: 11px; color: var(--gray-400); font-weight: 500; }
+  .submit-summary .total-amount { font-size: 22px; font-weight: 700; color: var(--navy); letter-spacing: -0.02em; }
+  .btn-submit { padding: 14px 24px; background: var(--gold); color: var(--navy); border: none; border-radius: 10px; font-size: 15px; font-weight: 700; font-family: inherit; cursor: pointer; transition: background 0.15s, transform 0.1s; white-space: nowrap; }
+  .btn-submit:hover { background: #b5821f; }
+  .btn-submit:active { transform: scale(0.98); }
+  .btn-submit:disabled { background: var(--gray-200); color: var(--gray-400); cursor: not-allowed; }
+
+  /* EMPTY WARNING */
+  .empty-warning { background: #fef3c7; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #92400e; margin-bottom: 12px; display: none; }
+
+  /* SUCCESS */
+  #success-screen { display: none; text-align: center; padding: 60px 24px; }
+  #success-screen .check { width: 64px; height: 64px; background: var(--green); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 28px; color: white; }
+  #success-screen h2 { font-size: 22px; font-weight: 700; margin-bottom: 8px; color: var(--navy); }
+  #success-screen p { font-size: 15px; color: var(--gray-600); line-height: 1.6; }
+
+  /* LOADING */
+  #loading-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 999; align-items: center; justify-content: center; }
+  #loading-overlay.active { display: flex; }
+  .spinner { background: white; border-radius: 16px; padding: 32px 40px; text-align: center; font-size: 15px; font-weight: 600; color: var(--navy); }
+  .spinner::before { content: ''; display: block; width: 36px; height: 36px; border: 3px solid var(--gray-200); border-top-color: var(--navy); border-radius: 50%; margin: 0 auto 16px; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* CONFIRMATION MODAL */
+  #confirm-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 500; align-items: flex-end; justify-content: center; padding: 0; }
+  #confirm-modal.active { display: flex; }
+  @media(min-width: 600px) { #confirm-modal { align-items: center; padding: 24px; } }
+  .modal-box { background: white; width: 100%; max-width: 560px; border-radius: 20px 20px 0 0; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; }
+  @media(min-width: 600px) { .modal-box { border-radius: 16px; } }
+  .modal-header { padding: 20px 20px 16px; border-bottom: 1px solid var(--gray-200); flex-shrink: 0; }
+  .modal-header h2 { font-size: 17px; font-weight: 700; color: var(--navy); margin-bottom: 2px; }
+  .modal-header p { font-size: 13px; color: var(--gray-400); }
+  .modal-body { overflow-y: auto; flex: 1; padding: 0; }
+  .modal-family-row { padding: 14px 20px 10px; background: var(--gray-100); border-bottom: 1px solid var(--gray-200); }
+  .modal-family-row .fam-name { font-size: 15px; font-weight: 600; color: var(--navy); }
+  .modal-family-row .fam-tel { font-size: 13px; color: var(--gray-600); margin-top: 2px; }
+  .modal-items { padding: 8px 0; }
+  .modal-item { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: baseline; padding: 8px 20px; border-bottom: 1px solid var(--gray-100); }
+  .modal-item:last-child { border-bottom: none; }
+  .modal-item-desc { font-size: 13px; color: var(--gray-800); line-height: 1.4; }
+  .modal-item-grade { font-size: 11px; color: var(--gray-400); }
+  .modal-item-qty { font-size: 13px; color: var(--gray-600); white-space: nowrap; }
+  .modal-item-sub { font-size: 13px; font-weight: 600; color: var(--navy); white-space: nowrap; text-align: right; min-width: 60px; }
+  .modal-footer { padding: 16px 20px; border-top: 2px solid var(--gray-200); flex-shrink: 0; }
+  .modal-total-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 16px; }
+  .modal-total-label { font-size: 14px; font-weight: 600; color: var(--gray-800); }
+  .modal-total-amount { font-size: 26px; font-weight: 700; color: var(--navy); letter-spacing: -0.02em; }
+  .modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .btn-back { padding: 13px; background: var(--gray-100); color: var(--gray-800); border: none; border-radius: 10px; font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer; }
+  .btn-back:hover { background: var(--gray-200); }
+  .btn-confirm { padding: 13px; background: var(--green); color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer; transition: background 0.15s; }
+  .btn-confirm:hover { background: #15803d; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">Catálogo Escolar 2026</div>
+  <h1>Pedido de Libros</h1>
+  <p>Selecciona los libros y las cantidades para tu familia</p>
+</header>
+
+<div id="total-bar">
+  <div>
+    <div class="label">Total de tu pedido</div>
+    <div class="amount" id="bar-total">$0.00</div>
+  </div>
+  <div class="items-count" id="bar-items">0 libros</div>
+</div>
+
+<main>
+  <div id="form-content">
+    <div class="info-card">
+      <h2>Datos de la familia</h2>
+
+      <!-- Nombre y Apellido -->
+      <div class="form-row" style="margin-bottom:12px">
+        <div class="form-group">
+          <label for="nombre">Nombre *</label>
+          <input type="text" id="nombre" placeholder="Ej: Juan">
+        </div>
+        <div class="form-group">
+          <label for="apellido">Apellido *</label>
+          <input type="text" id="apellido" placeholder="Ej: Martínez">
+        </div>
+      </div>
+
+      <!-- Teléfono -->
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Teléfono *</label>
+        <div class="phone-row">
+          <div class="form-group">
+            <div class="code-wrapper">
+              <div class="code-selector" id="code-selector" tabindex="0" onclick="toggleCodeDropdown()">
+                <span class="flag" id="sel-flag">🇻🇪</span>
+                <span class="code-val" id="sel-code">+58</span>
+                <span class="arrow">▼</span>
+              </div>
+              <div class="code-dropdown" id="code-dropdown">
+                <div class="code-search">
+                  <input type="text" id="code-search-input" placeholder="Buscar país…" oninput="filterCodes(this.value)" onclick="event.stopPropagation()">
+                </div>
+                <div class="code-list" id="code-list"></div>
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+            <input type="tel" id="telefono" placeholder="Ej: 414 1234567">
+          </div>
+        </div>
+      </div>
+
+      <!-- Email -->
+      <div class="form-group">
+        <label for="email">Email de la familia *</label>
+        <input type="email" id="email" placeholder="Ej: familia@correo.com">
+      </div>
+    </div>
+    <div id="catalog"></div>
+    <div class="empty-warning" id="empty-warning">⚠️ Debes seleccionar al menos un libro antes de continuar.</div>
+  </div>
+
+  <div id="success-screen">
+    <div class="check">✓</div>
+    <h2>¡Pedido enviado!</h2>
+    <p>Gracias. Tu pedido fue registrado correctamente.<br>Nos pondremos en contacto contigo pronto.</p>
+  </div>
+</main>
+
+<div class="submit-section" id="submit-bar">
+  <div class="submit-inner">
+    <div class="submit-summary">
+      <div class="total-label">Total a pagar (USD)</div>
+      <div class="total-amount" id="footer-total">$0.00</div>
+    </div>
+    <button class="btn-submit" id="btn-submit" onclick="openConfirmModal()">Revisar pedido →</button>
+  </div>
+</div>
+
+<!-- CONFIRMATION MODAL -->
+<div id="confirm-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2>Confirmar pedido</h2>
+      <p>Revisa los detalles antes de enviar</p>
+    </div>
+    <div class="modal-body">
+      <div class="modal-family-row">
+        <div class="fam-name" id="modal-nombre">—</div>
+        <div class="fam-tel" id="modal-tel">—</div>
+        <div class="fam-tel" id="modal-email" style="margin-top:1px">—</div>
+      </div>
+      <div class="modal-items" id="modal-items"></div>
+    </div>
+    <div class="modal-footer">
+      <div class="modal-total-row">
+        <div class="modal-total-label">Total del pedido (USD)</div>
+        <div class="modal-total-amount" id="modal-total">$0.00</div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-back" onclick="closeConfirmModal()">← Editar</button>
+        <button class="btn-confirm" onclick="confirmAndSend()">Confirmar y enviar ✓</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="loading-overlay">
+  <div class="spinner">Enviando pedido…</div>
+</div>
+
+<script>
+// ── BOOKS DATA ────────────────────────────────────────────────
+const BOOKS = [{"ref":"20811","desc":"Cantemos con Gozo Nivel A Guía del maestro","usd":1.71,"grade":"Grado 1"},{"ref":"20821","desc":"Cantemos con Gozo Nivel A-1 Cuaderno de trabajo","usd":2.11,"grade":"Grado 1"},{"ref":"20829","desc":"Cantemos con Gozo Nivel A-2 Cuaderno de trabajo","usd":4.03,"grade":"Grado 1"},{"ref":"55701","desc":"Curso de Música nivel A Alumno","usd":2.39,"grade":"Grado 1"},{"ref":"55709","desc":"Curso de Música nivel A Guía del maestro","usd":2.39,"grade":"Grado 1"},{"ref":"55801","desc":"Curso de Música nivel B Alumno","usd":2.39,"grade":"Grado 1"},{"ref":"55809","desc":"Curso de Música nivel B Guía del maestro","usd":2.87,"grade":"Grado 1"},{"ref":"27710","desc":"Escuela Bíblica de verano Historias de Génesis y Job","usd":5.79,"grade":"Grado 1"},{"ref":"20511","desc":"Estudios Sociales Alumno","usd":11.71,"grade":"Grado 1"},{"ref":"20518","desc":"Estudios Sociales Exámenes","usd":2.89,"grade":"Grado 1"},{"ref":"20519","desc":"Estudios Sociales Guía del maestro","usd":10.53,"grade":"Grado 1"},{"ref":"11121x13","desc":"Lectura nivel A Cuaderno de ejercicios 1","usd":3.82,"grade":"Grado 1"},{"ref":"11122x13","desc":"Lectura nivel A Cuaderno de ejercicios 2","usd":3.82,"grade":"Grado 1"},{"ref":"11125x13","desc":"Lectura nivel A Cuaderno de escritura","usd":4.55,"grade":"Grado 1"},{"ref":"11191x13","desc":"Lectura nivel A Guía del maestro","usd":10.95,"grade":"Grado 1"},{"ref":"11123x13","desc":"Lectura nivel A Hojas de práctica","usd":8.58,"grade":"Grado 1"},{"ref":"11124x13","desc":"Lectura nivel A Practiquemos con palabras","usd":2.89,"grade":"Grado 1"},{"ref":"20116x1","desc":"Lectura nivel A Tarjetas con letras y sílabas","usd":8.24,"grade":"Grado 1"},{"ref":"20116x2","desc":"Lectura nivel A Tarjetas con uniones y reglas","usd":3.37,"grade":"Grado 1"},{"ref":"20116x4","desc":"Lectura nivel A Tarjetas ilustradas del alfabeto","usd":6.08,"grade":"Grado 1"},{"ref":"11131x13","desc":"Lectura nivel B Cuaderno de ejercicios 1","usd":3.82,"grade":"Grado 1"},{"ref":"11132x13","desc":"Lectura nivel B Cuaderno de ejercicios 2","usd":3.82,"grade":"Grado 1"},{"ref":"11135x13","desc":"Lectura nivel B Cuaderno de escritura","usd":4.55,"grade":"Grado 1"},{"ref":"11192x13","desc":"Lectura nivel B Guía del maestro","usd":10.26,"grade":"Grado 1"},{"ref":"11133x13","desc":"Lectura nivel B Hojas de práctica","usd":8.37,"grade":"Grado 1"},{"ref":"11101x13","desc":"Lectura nivel B Libro de lectura","usd":5.53,"grade":"Grado 1"},{"ref":"11134x13","desc":"Lectura nivel B Practiquemos con palabras","usd":2.89,"grade":"Grado 1"},{"ref":"11143x13","desc":"Lectura nivel B Tarjetas de frases","usd":7.58,"grade":"Grado 1"},{"ref":"20112x5","desc":"Lectura nivel BC Cuaderno de ejercicios","usd":3.97,"grade":"Grado 1"},{"ref":"20119x3","desc":"Lectura nivel BC Guía de maestro","usd":3.97,"grade":"Grado 1"},{"ref":"20111x2","desc":"Lectura nivel BC Libro de lectura","usd":2.63,"grade":"Grado 1"},{"ref":"20311x1","desc":"Matemáticas Cuaderno de ejercicios 1","usd":5.53,"grade":"Grado 1"},{"ref":"20311x2","desc":"Matemáticas Cuaderno de ejercicios 2","usd":5.53,"grade":"Grado 1"},{"ref":"20319","desc":"Matemáticas Guía de maestro","usd":11.84,"grade":"Grado 1"},{"ref":"20313","desc":"Matemáticas Hojas de práctica","usd":5.0,"grade":"Grado 1"},{"ref":"20317","desc":"Matemáticas Pruebas de rapidez","usd":3.82,"grade":"Grado 1"},{"ref":"20314","desc":"Matemáticas Tarjetas de repaso (Flash Cards)","usd":13.68,"grade":"Grado 1"},{"ref":"182211x1","desc":"Ciencias Buenos modales Alumno","usd":2.71,"grade":"Grado 2"},{"ref":"182911x1","desc":"Ciencias Buenos modales Maestro","usd":3.42,"grade":"Grado 2"},{"ref":"20903","desc":"Conociendo el diccionario Alumno","usd":3.45,"grade":"Grado 2"},{"ref":"20904","desc":"Conociendo el diccionario Guía del maestro","usd":2.53,"grade":"Grado 2"},{"ref":"20721","desc":"Escritura y Ortografía Alumno","usd":5.26,"grade":"Grado 2"},{"ref":"20729","desc":"Escritura y Ortografía Guía del maestro","usd":5.26,"grade":"Grado 2"},{"ref":"27720","desc":"Escuela bíblica de verano Camino a la Tierra Prometida","usd":5.16,"grade":"Grado 2"},{"ref":"20521","desc":"Estudios Sociales Alumno","usd":11.71,"grade":"Grado 2"},{"ref":"20528","desc":"Estudios Sociales Exámenes","usd":2.89,"grade":"Grado 2"},{"ref":"20529","desc":"Estudios Sociales Guía del maestro","usd":10.53,"grade":"Grado 2"},{"ref":"11221x13","desc":"Lectura nivel C Cuaderno de ejercicios 1","usd":3.82,"grade":"Grado 2"},{"ref":"11222x13","desc":"Lectura nivel C Cuaderno de ejercicios 2","usd":3.82,"grade":"Grado 2"},{"ref":"11291x13","desc":"Lectura nivel C Guía del maestro","usd":9.34,"grade":"Grado 2"},{"ref":"11201x13","desc":"Lectura nivel C Libro de lectura","usd":6.05,"grade":"Grado 2"},{"ref":"11223x13","desc":"Lectura nivel D Cuaderno de ejercicios 1","usd":3.95,"grade":"Grado 2"},{"ref":"11224x13","desc":"Lectura nivel D Cuaderno de ejercicios 2","usd":3.95,"grade":"Grado 2"},{"ref":"11292x13","desc":"Lectura nivel D Guía del maestro","usd":7.05,"grade":"Grado 2"},{"ref":"11202x13","desc":"Lectura nivel D Libro de lectura","usd":6.53,"grade":"Grado 2"},{"ref":"20221","desc":"Lengua Alumno","usd":13.42,"grade":"Grado 2"},{"ref":"20228","desc":"Lengua Exámenes","usd":3.03,"grade":"Grado 2"},{"ref":"20229","desc":"Lengua Guía del maestro","usd":11.53,"grade":"Grado 2"},{"ref":"20321x1","desc":"Matemáticas Cuaderno de ejercicios 1","usd":5.53,"grade":"Grado 2"},{"ref":"20321x2","desc":"Matemáticas Cuaderno de ejercicios 2","usd":5.53,"grade":"Grado 2"},{"ref":"20329","desc":"Matemáticas Guía del maestro","usd":11.84,"grade":"Grado 2"},{"ref":"20323","desc":"Matemáticas Hojas de práctica","usd":4.55,"grade":"Grado 2"},{"ref":"20327","desc":"Matemáticas Pruebas de rapidez","usd":3.82,"grade":"Grado 2"},{"ref":"53062","desc":"Tarjetas de Multiplicación/división","usd":7.05,"grade":"Grado 2"},{"ref":"53061","desc":"Tarjetas Suma/Resta","usd":7.05,"grade":"Grado 2"},{"ref":"143011x1","desc":"Ciencias Alumno","usd":11.84,"grade":"Grado 3"},{"ref":"143111x1","desc":"Ciencias Exámenes","usd":1.53,"grade":"Grado 3"},{"ref":"143911x1","desc":"Ciencias Guía del maestro","usd":12.18,"grade":"Grado 3"},{"ref":"20731","desc":"Escritura y Ortografía Alumno","usd":5.26,"grade":"Grado 3"},{"ref":"20739","desc":"Escritura y Ortografía Guía del maestro","usd":5.26,"grade":"Grado 3"},{"ref":"27730","desc":"Escuela bíblica de verano El maravilloso Jesús","usd":5.16,"grade":"Grado 3"},{"ref":"20531","desc":"Estudios Sociales Alumno","usd":11.71,"grade":"Grado 3"},{"ref":"20538","desc":"Estudios Sociales Exámenes","usd":2.89,"grade":"Grado 3"},{"ref":"20539","desc":"Estudios Sociales Guía del maestro","usd":10.53,"grade":"Grado 3"},{"ref":"11391x13","desc":"Lectura nivel E Guía del maestro","usd":8.03,"grade":"Grado 3"},{"ref":"11311x13","desc":"Lectura nivel E Hojas & Exámenes","usd":2.11,"grade":"Grado 3"},{"ref":"11301x13","desc":"Lectura nivel E Libro de lectura","usd":7.45,"grade":"Grado 3"},{"ref":"11331x13","desc":"Lectura nivel E Manual de ejercicios","usd":5.92,"grade":"Grado 3"},{"ref":"11392x13","desc":"Lectura nivel F Guía del maestro","usd":8.03,"grade":"Grado 3"},{"ref":"11312x13","desc":"Lectura nivel F Hojas & Exámenes","usd":2.11,"grade":"Grado 3"},{"ref":"11302x13","desc":"Lectura nivel F Libro de Lectura","usd":7.45,"grade":"Grado 3"},{"ref":"11332x13","desc":"Lectura nivel F Manual de ejercicios","usd":5.92,"grade":"Grado 3"},{"ref":"20231","desc":"Lengua Alumno","usd":13.42,"grade":"Grado 3"},{"ref":"20238","desc":"Lengua Exámenes","usd":3.03,"grade":"Grado 3"},{"ref":"20239","desc":"Lengua Guía del maestro","usd":11.53,"grade":"Grado 3"},{"ref":"20338","desc":"Matemáticas Exámenes","usd":1.92,"grade":"Grado 3"},{"ref":"20339","desc":"Matemáticas Guía del maestro","usd":11.39,"grade":"Grado 3"},{"ref":"20337","desc":"Matemáticas Pruebas de rapidez","usd":3.82,"grade":"Grado 3"},{"ref":"20331","desc":"Matemáticas Texto del alumno","usd":9.55,"grade":"Grado 3"},{"ref":"144011x1","desc":"Ciencias Alumno","usd":11.84,"grade":"Grado 4"},{"ref":"144111x1","desc":"Ciencias Exámenes","usd":1.53,"grade":"Grado 4"},{"ref":"144911x1","desc":"Ciencias Guía del maestro","usd":12.18,"grade":"Grado 4"},{"ref":"20741","desc":"Escritura y Ortografía Alumno","usd":5.26,"grade":"Grado 4"},{"ref":"20749","desc":"Escritura y Ortografía Guía del maestro","usd":5.26,"grade":"Grado 4"},{"ref":"27740","desc":"Escuela bíblica de verano Historias de Josué, Jueces y Reyes","usd":5.16,"grade":"Grado 4"},{"ref":"20541","desc":"Estudios sociales Alumno","usd":11.71,"grade":"Grado 4"},{"ref":"20548","desc":"Estudios sociales Exámenes","usd":2.89,"grade":"Grado 4"},{"ref":"20549","desc":"Estudios sociales Guía del maestro","usd":10.53,"grade":"Grado 4"},{"ref":"11491x13","desc":"Lectura nivel G Guía del maestro","usd":11.84,"grade":"Grado 4"},{"ref":"11411x13","desc":"Lectura nivel G Hojas & Exámenes","usd":2.11,"grade":"Grado 4"},{"ref":"11401x13","desc":"Lectura nivel G Libro de lectura","usd":11.05,"grade":"Grado 4"},{"ref":"11431x13","desc":"Lectura nivel G Manual de ejercicios","usd":8.55,"grade":"Grado 4"},{"ref":"20241","desc":"Lengua Alumno","usd":13.42,"grade":"Grado 4"},{"ref":"20248","desc":"Lengua Exámenes","usd":3.03,"grade":"Grado 4"},{"ref":"20249","desc":"Lengua Guía del maestro","usd":11.53,"grade":"Grado 4"},{"ref":"20902","desc":"Mapas Generales del Mundo","usd":3.68,"grade":"Grado 4"},{"ref":"20348","desc":"Matemáticas Exámenes","usd":1.79,"grade":"Grado 4"},{"ref":"20349","desc":"Matemáticas Guía del maestro","usd":15.39,"grade":"Grado 4"},{"ref":"20347","desc":"Matemáticas Pruebas de rapidez","usd":3.82,"grade":"Grado 4"},{"ref":"20341","desc":"Matemáticas Texto del alumno","usd":11.66,"grade":"Grado 4"},{"ref":"145011x1","desc":"Ciencias Alumno","usd":12.58,"grade":"Grado 5"},{"ref":"145111x1","desc":"Ciencias Exámenes","usd":1.53,"grade":"Grado 5"},{"ref":"145911x1","desc":"Ciencias Guía del maestro","usd":12.89,"grade":"Grado 5"},{"ref":"20751","desc":"Escritura y Ortografía Alumno","usd":5.26,"grade":"Grado 5"},{"ref":"20759","desc":"Escritura y Ortografía Guía del maestro","usd":5.26,"grade":"Grado 5"},{"ref":"27750","desc":"Escuela bíblica de verano Reyes y Profetas","usd":5.16,"grade":"Grado 5"},{"ref":"20551","desc":"Estudios sociales Alumno","usd":11.71,"grade":"Grado 5"},{"ref":"20558","desc":"Estudios sociales Exámenes","usd":2.89,"grade":"Grado 5"},{"ref":"20559","desc":"Estudios sociales Guía del maestro","usd":10.53,"grade":"Grado 5"},{"ref":"11511x13","desc":"Lectura nivel H Exámenes","usd":1.66,"grade":"Grado 5"},{"ref":"11591x13","desc":"Lectura nivel H Guía del maestro","usd":10.13,"grade":"Grado 5"},{"ref":"11501x13","desc":"Lectura nivel H Libro de lectura","usd":9.87,"grade":"Grado 5"},{"ref":"11531x13","desc":"Lectura nivel H Manual de ejercicios","usd":6.71,"grade":"Grado 5"},{"ref":"20251","desc":"Lengua Alumno","usd":13.42,"grade":"Grado 5"},{"ref":"20258","desc":"Lengua Exámenes","usd":3.03,"grade":"Grado 5"},{"ref":"20259","desc":"Lengua Guía del maestro","usd":11.53,"grade":"Grado 5"},{"ref":"20358","desc":"Matemáticas Exámenes","usd":1.79,"grade":"Grado 5"},{"ref":"20359","desc":"Matemáticas Guía del maestro","usd":14.42,"grade":"Grado 5"},{"ref":"20357","desc":"Matemáticas Pruebas de rapidez","usd":3.82,"grade":"Grado 5"},{"ref":"20351","desc":"Matemáticas Texto del alumno","usd":11.05,"grade":"Grado 5"},{"ref":"146011x1","desc":"Ciencias Alumno","usd":14.68,"grade":"Grado 6"},{"ref":"146111x1","desc":"Ciencias Exámenes","usd":1.53,"grade":"Grado 6"},{"ref":"146911x1","desc":"Ciencias Guía del maestro","usd":15.79,"grade":"Grado 6"},{"ref":"20761","desc":"Escritura y ortografía Alumno","usd":5.26,"grade":"Grado 6"},{"ref":"20769","desc":"Escritura y ortografía Guía del maestro","usd":5.26,"grade":"Grado 6"},{"ref":"27760","desc":"Escuela bíblica de verano Jesús, nuestro maestro","usd":5.16,"grade":"Grado 6"},{"ref":"20561","desc":"Estudios Sociales Alumno","usd":11.71,"grade":"Grado 6"},{"ref":"20568","desc":"Estudios Sociales Exámenes","usd":2.89,"grade":"Grado 6"},{"ref":"20569","desc":"Estudios Sociales Guía del maestro","usd":1.34,"grade":"Grado 6"},{"ref":"11601x1","desc":"Lectura (tiempo de plantar) Alumno","usd":8.95,"grade":"Grado 6"},{"ref":"11611x1","desc":"Lectura (tiempo de plantar) Exámenes","usd":1.53,"grade":"Grado 6"},{"ref":"11691x1","desc":"Lectura (tiempo de plantar) Guía del maestro","usd":5.53,"grade":"Grado 6"},{"ref":"20261","desc":"Lengua Alumno","usd":13.42,"grade":"Grado 6"},{"ref":"20268","desc":"Lengua Exámenes","usd":3.03,"grade":"Grado 6"},{"ref":"20269","desc":"Lengua Guía del maestro","usd":11.53,"grade":"Grado 6"},{"ref":"20901","desc":"Mapas de América Latina","usd":3.68,"grade":"Grado 6"},{"ref":"20368","desc":"Matemáticas Exámenes","usd":1.71,"grade":"Grado 6"},{"ref":"20369","desc":"Matemáticas Guía del maestro","usd":14.08,"grade":"Grado 6"},{"ref":"20367","desc":"Matemáticas Pruebas de rapidez","usd":3.03,"grade":"Grado 6"},{"ref":"20361","desc":"Matemáticas Texto del alumno","usd":10.87,"grade":"Grado 6"},{"ref":"147011x1","desc":"Ciencias Alumno","usd":14.87,"grade":"Grado 7"},{"ref":"147111x1","desc":"Ciencias Exámenes","usd":1.53,"grade":"Grado 7"},{"ref":"147911x1","desc":"Ciencias Guía del maestro","usd":16.71,"grade":"Grado 7"},{"ref":"27770","desc":"Escuela bíblica de verano Aventuras de la Iglesia Primitiva","usd":5.18,"grade":"Grado 7"},{"ref":"20571","desc":"Estudios Sociales Alumno","usd":11.84,"grade":"Grado 7"},{"ref":"20578","desc":"Estudios Sociales Exámenes","usd":1.32,"grade":"Grado 7"},{"ref":"20579","desc":"Estudios Sociales Guía del maestro","usd":5.26,"grade":"Grado 7"},{"ref":"11701x1","desc":"Lectura (tiempo de regar) Alumno","usd":9.16,"grade":"Grado 7"},{"ref":"11711x1","desc":"Lectura (tiempo de regar) Exámenes","usd":1.53,"grade":"Grado 7"},{"ref":"11791x1","desc":"Lectura (tiempo de regar) Guía del maestro","usd":5.92,"grade":"Grado 7"},{"ref":"20271","desc":"Lengua Alumno","usd":13.16,"grade":"Grado 7"},{"ref":"20278","desc":"Lengua Exámenes","usd":1.32,"grade":"Grado 7"},{"ref":"20279","desc":"Lengua Guía del maestro","usd":10.53,"grade":"Grado 7"},{"ref":"20378","desc":"Matemáticas Exámenes","usd":1.92,"grade":"Grado 7"},{"ref":"20379","desc":"Matemáticas Guía del maestro","usd":16.39,"grade":"Grado 7"},{"ref":"20377","desc":"Matemáticas Pruebas de rapidez","usd":3.63,"grade":"Grado 7"},{"ref":"20371","desc":"Matemáticas Texto del alumno","usd":12.37,"grade":"Grado 7"},{"ref":"20906","desc":"Atlas Exámenes","usd":1.32,"grade":"Grado 8"},{"ref":"20907","desc":"Atlas Guía del Maestro","usd":11.84,"grade":"Grado 8"},{"ref":"20905","desc":"Atlas Libro del Alumno","usd":11.84,"grade":"Grado 8"},{"ref":"20481","desc":"Ciencias Naturales Alumno","usd":16.84,"grade":"Grado 8"},{"ref":"20488","desc":"Ciencias Naturales Exámenes","usd":1.32,"grade":"Grado 8"},{"ref":"20489","desc":"Ciencias Naturales Guía del maestro","usd":6.58,"grade":"Grado 8"},{"ref":"11801x1","desc":"Lectura (tiempo de cosechar) Alumno","usd":9.87,"grade":"Grado 8"},{"ref":"11811x1","desc":"Lectura (tiempo de cosechar) Exámenes","usd":1.53,"grade":"Grado 8"},{"ref":"11891x1","desc":"Lectura (tiempo de cosechar) Guía del maestro","usd":6.53,"grade":"Grado 8"},{"ref":"20388","desc":"Matemáticas Exámenes","usd":1.32,"grade":"Grado 8"},{"ref":"20389","desc":"Matemáticas Guía del maestro","usd":16.39,"grade":"Grado 8"},{"ref":"20387","desc":"Matemáticas Pruebas de rapidez","usd":3.63,"grade":"Grado 8"},{"ref":"20381","desc":"Matemáticas Texto del alumno","usd":12.37,"grade":"Grado 8"},{"ref":"20591","desc":"Estudios Sociales Alumno","usd":11.84,"grade":"Grado 9"},{"ref":"20598","desc":"Estudios Sociales Exámenes","usd":1.32,"grade":"Grado 9"},{"ref":"20599","desc":"Estudios Sociales Guía del maestro","usd":5.26,"grade":"Grado 9"},{"ref":"10011x1","desc":"Aventuras con libros","usd":2.63,"grade":"Preescolar"},{"ref":"10013x1","desc":"Contar con números","usd":2.63,"grade":"Preescolar"},{"ref":"10012x1","desc":"Dibujos de la Biblia","usd":2.63,"grade":"Preescolar"},{"ref":"22014","desc":"Encuentra las respuestas","usd":2.63,"grade":"Preescolar"},{"ref":"10031x1","desc":"Ganamos destrezas","usd":2.63,"grade":"Preescolar"},{"ref":"10002x1","desc":"Historias de la Biblia","usd":4.21,"grade":"Preescolar"},{"ref":"22011","desc":"Mira a tu alrededor","usd":2.63,"grade":"Preescolar"},{"ref":"22012","desc":"Trabaja con cuidado","usd":2.63,"grade":"Preescolar"}];
+
+// Map ref -> book for fast lookup
+const BOOK_MAP = {};
+BOOKS.forEach(b => BOOK_MAP[b.ref] = b);
+
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwOIp9IVoyaWA_GdChcoMDJwtFGI8nLhkKE1s9igWFafl4Fk89E99iBZRkoM45kNJrd/exec';
+
+// ── PHONE COUNTRY CODES ───────────────────────────────────────
+const TOP_CODES = [
+  { country: 'Venezuela', code: '+58', flag: '🇻🇪' },
+  { country: 'Colombia',  code: '+57', flag: '🇨🇴' },
+];
+const ALL_CODES = [
+  {country:'Afghanistan',code:'+93',flag:'🇦🇫'},{country:'Albania',code:'+355',flag:'🇦🇱'},
+  {country:'Algeria',code:'+213',flag:'🇩🇿'},{country:'Argentina',code:'+54',flag:'🇦🇷'},
+  {country:'Australia',code:'+61',flag:'🇦🇺'},{country:'Austria',code:'+43',flag:'🇦🇹'},
+  {country:'Belgium',code:'+32',flag:'🇧🇪'},{country:'Bolivia',code:'+591',flag:'🇧🇴'},
+  {country:'Brazil',code:'+55',flag:'🇧🇷'},{country:'Canada',code:'+1',flag:'🇨🇦'},
+  {country:'Chile',code:'+56',flag:'🇨🇱'},{country:'China',code:'+86',flag:'🇨🇳'},
+  {country:'Colombia',code:'+57',flag:'🇨🇴'},{country:'Costa Rica',code:'+506',flag:'🇨🇷'},
+  {country:'Cuba',code:'+53',flag:'🇨🇺'},{country:'Dominican Republic',code:'+1-809',flag:'🇩🇴'},
+  {country:'Ecuador',code:'+593',flag:'🇪🇨'},{country:'Egypt',code:'+20',flag:'🇪🇬'},
+  {country:'El Salvador',code:'+503',flag:'🇸🇻'},{country:'France',code:'+33',flag:'🇫🇷'},
+  {country:'Germany',code:'+49',flag:'🇩🇪'},{country:'Guatemala',code:'+502',flag:'🇬🇹'},
+  {country:'Honduras',code:'+504',flag:'🇭🇳'},{country:'India',code:'+91',flag:'🇮🇳'},
+  {country:'Italy',code:'+39',flag:'🇮🇹'},{country:'Jamaica',code:'+1-876',flag:'🇯🇲'},
+  {country:'Japan',code:'+81',flag:'🇯🇵'},{country:'Mexico',code:'+52',flag:'🇲🇽'},
+  {country:'Netherlands',code:'+31',flag:'🇳🇱'},{country:'Nicaragua',code:'+505',flag:'🇳🇮'},
+  {country:'Nigeria',code:'+234',flag:'🇳🇬'},{country:'Panama',code:'+507',flag:'🇵🇦'},
+  {country:'Paraguay',code:'+595',flag:'🇵🇾'},{country:'Peru',code:'+51',flag:'🇵🇪'},
+  {country:'Philippines',code:'+63',flag:'🇵🇭'},{country:'Portugal',code:'+351',flag:'🇵🇹'},
+  {country:'Puerto Rico',code:'+1-787',flag:'🇵🇷'},{country:'Russia',code:'+7',flag:'🇷🇺'},
+  {country:'Saudi Arabia',code:'+966',flag:'🇸🇦'},{country:'South Africa',code:'+27',flag:'🇿🇦'},
+  {country:'Spain',code:'+34',flag:'🇪🇸'},{country:'Trinidad and Tobago',code:'+1-868',flag:'🇹🇹'},
+  {country:'Turkey',code:'+90',flag:'🇹🇷'},{country:'UAE',code:'+971',flag:'🇦🇪'},
+  {country:'UK',code:'+44',flag:'🇬🇧'},{country:'Ukraine',code:'+380',flag:'🇺🇦'},
+  {country:'United States',code:'+1',flag:'🇺🇸'},{country:'Uruguay',code:'+598',flag:'🇺🇾'},
+  {country:'Venezuela',code:'+58',flag:'🇻🇪'},
+];
+const REST_CODES = ALL_CODES.filter(c => !TOP_CODES.find(t => t.code === c.code));
+let selectedCode = { country: 'Venezuela', code: '+58', flag: '🇻🇪' };
+
+function buildCodeList(filter) {
+  const q = (filter||'').toLowerCase();
+  const topF = TOP_CODES.filter(c => !q || c.country.toLowerCase().includes(q));
+  const restF = REST_CODES.filter(c => c.country.toLowerCase().includes(q) || c.code.includes(q));
+  const list = document.getElementById('code-list');
+  let html = topF.map(c => codeOptionHTML(c)).join('');
+  if (topF.length && restF.length) html += '<div class="code-divider"></div>';
+  html += restF.map(c => codeOptionHTML(c)).join('');
+  list.innerHTML = html || '<div style="padding:12px 14px;font-size:13px;color:var(--gray-400)">Sin resultados</div>';
+}
+function codeOptionHTML(c) {
+  return `<div class="code-option ${c.code===selectedCode.code?'selected':''}" onclick="selectCode('${c.country}','${c.code}','${c.flag}')">
+    <span class="opt-flag">${c.flag}</span><span class="opt-country">${c.country}</span><span class="opt-code">${c.code}</span>
+  </div>`;
+}
+function selectCode(country, code, flag) {
+  selectedCode = { country, code, flag };
+  document.getElementById('sel-flag').textContent = flag;
+  document.getElementById('sel-code').textContent = code;
+  closeCodeDropdown();
+}
+function toggleCodeDropdown() {
+  const dd = document.getElementById('code-dropdown');
+  if (dd.classList.contains('open')) { closeCodeDropdown(); return; }
+  document.getElementById('code-selector').classList.add('open');
+  dd.classList.add('open');
+  buildCodeList('');
+  setTimeout(() => document.getElementById('code-search-input').focus(), 50);
+}
+function closeCodeDropdown() {
+  document.getElementById('code-selector').classList.remove('open');
+  document.getElementById('code-dropdown').classList.remove('open');
+  document.getElementById('code-search-input').value = '';
+}
+function filterCodes(v) { buildCodeList(v); }
+document.addEventListener('click', e => { if (!e.target.closest('.code-wrapper')) closeCodeDropdown(); });
+
+// State: ref (safe) -> qty
+const quantities = {};
+
+// ── SAFE ID ───────────────────────────────────────────────────
+// Dots and other special chars break getElementById / querySelector
+function safeId(ref) { return 'b_' + ref.replace(/[^a-zA-Z0-9]/g, '_'); }
+
+// ── BUILD CATALOG ─────────────────────────────────────────────
+function buildCatalog() {
+  const grades = {};
+  BOOKS.forEach(b => { if (!grades[b.grade]) grades[b.grade] = []; grades[b.grade].push(b); });
+
+  const gradeOrder = ['Preescolar','Grado 1','Grado 2','Grado 3','Grado 4','Grado 5','Grado 6','Grado 7','Grado 8','Grado 9'];
+  const catalog = document.getElementById('catalog');
+
+  gradeOrder.forEach(grade => {
+    if (!grades[grade]) return;
+    const gid = grade.replace(/\s+/g, '-');
+    const section = document.createElement('div');
+    section.className = 'grade-section collapsed';
+    section.id = 'section-' + gid;
+
+    const rows = grades[grade].map(b => {
+      const sid = safeId(b.ref);
+      return `
+        <div class="book-row" id="row-${sid}">
+          <div class="book-info">
+            <div class="book-desc">${b.desc}</div>
+            <div class="book-ref">Ref: ${b.ref}</div>
+          </div>
+          <div class="book-unit-price">
+            <span class="price-label">Precio unit.</span>
+            $${b.usd.toFixed(2)}
+          </div>
+          <input type="number" class="qty-input" min="0" max="99" value="" placeholder="0"
+            data-ref="${b.ref}" oninput="onQtyChange(this)">
+          <div class="book-subtotal" id="sub-${sid}"></div>
+        </div>`;
+    }).join('');
+
+    section.innerHTML = `
+      <div class="grade-header" onclick="toggleGrade(this)">
+        <h3>${grade}</h3>
+        <div class="grade-meta">
+          <span class="grade-subtotal" id="gtotal-${gid}"></span>
+          <span class="chevron">▼</span>
+        </div>
+      </div>
+      <div class="grade-body">
+        <div class="book-row-header">
+          <span>Descripción</span><span>Precio</span><span>Cant.</span><span>Subtotal</span>
+        </div>
+        ${rows}
+      </div>`;
+    catalog.appendChild(section);
+  });
+}
+
+function toggleGrade(header) {
+  header.closest('.grade-section').classList.toggle('collapsed');
+}
+
+// ── QTY CHANGE → UPDATE ROW + RECALCULATE ────────────────────
+function onQtyChange(input) {
+  const ref = input.dataset.ref;
+  const qty = Math.max(0, parseInt(input.value) || 0);
+  const book = BOOK_MAP[ref];
+  const sid = safeId(ref);
+  const row = document.getElementById('row-' + sid);
+  const subEl = document.getElementById('sub-' + sid);
+
+  if (qty > 0) {
+    quantities[ref] = qty;
+    row.classList.add('has-qty');
+    subEl.textContent = '$' + (qty * book.usd).toFixed(2);
+  } else {
+    delete quantities[ref];
+    row.classList.remove('has-qty');
+    subEl.textContent = '';
+  }
+  recalculate();
+}
+
+// ── RECALCULATE TOTALS ────────────────────────────────────────
+function recalculate() {
+  let grandTotal = 0;
+  let totalItems = 0;
+  const gradeTotals = {};
+
+  BOOKS.forEach(b => {
+    const qty = quantities[b.ref] || 0;
+    if (qty > 0) {
+      const sub = qty * b.usd;
+      grandTotal += sub;
+      totalItems += qty;
+      gradeTotals[b.grade] = (gradeTotals[b.grade] || 0) + sub;
+    }
+  });
+
+  document.getElementById('bar-total').textContent = '$' + grandTotal.toFixed(2);
+  document.getElementById('footer-total').textContent = '$' + grandTotal.toFixed(2);
+  document.getElementById('bar-items').textContent = totalItems + (totalItems === 1 ? ' libro' : ' libros');
+
+  // Per-grade totals — update all
+  const gradeOrder = ['Preescolar','Grado 1','Grado 2','Grado 3','Grado 4','Grado 5','Grado 6','Grado 7','Grado 8','Grado 9'];
+  gradeOrder.forEach(grade => {
+    const gid = grade.replace(/\s+/g, '-');
+    const el = document.getElementById('gtotal-' + gid);
+    if (!el) return;
+    const t = gradeTotals[grade];
+    el.textContent = t ? '$' + t.toFixed(2) : '';
+  });
+}
+
+// ── VALIDATE & OPEN MODAL ─────────────────────────────────────
+function openConfirmModal() {
+  const nombre   = document.getElementById('nombre').value.trim();
+  const apellido = document.getElementById('apellido').value.trim();
+  const telefono = document.getElementById('telefono').value.trim();
+  const email    = document.getElementById('email').value.trim();
+  let valid = true;
+
+  ['nombre','apellido','telefono','email'].forEach(id => document.getElementById(id).classList.remove('error'));
+
+  if (!nombre)   { document.getElementById('nombre').classList.add('error');   valid = false; }
+  if (!apellido) { document.getElementById('apellido').classList.add('error'); valid = false; }
+  if (!telefono) { document.getElementById('telefono').classList.add('error'); valid = false; }
+  if (!email || !email.includes('@')) { document.getElementById('email').classList.add('error'); valid = false; }
+  if (!valid) { document.getElementById('nombre').scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+
+  const selected = BOOKS.filter(b => quantities[b.ref] > 0);
+  if (selected.length === 0) { document.getElementById('empty-warning').style.display = 'block'; return; }
+  document.getElementById('empty-warning').style.display = 'none';
+
+  const fullName = nombre + ' ' + apellido;
+  const fullPhone = selectedCode.code + ' ' + telefono;
+  const total = selected.reduce((s, b) => s + quantities[b.ref] * b.usd, 0);
+
+  document.getElementById('modal-nombre').textContent = fullName;
+  document.getElementById('modal-tel').textContent = selectedCode.flag + ' ' + fullPhone;
+  document.getElementById('modal-email').textContent = '✉ ' + email;
+  document.getElementById('modal-total').textContent = '$' + total.toFixed(2);
+
+  const itemsHtml = selected.map(b => {
+    const qty = quantities[b.ref];
+    const sub = (qty * b.usd).toFixed(2);
+    return `<div class="modal-item">
+      <div><div class="modal-item-desc">${b.desc}</div><div class="modal-item-grade">${b.grade}</div></div>
+      <div class="modal-item-qty">${qty} × $${b.usd.toFixed(2)}</div>
+      <div class="modal-item-sub">$${sub}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('modal-items').innerHTML = itemsHtml;
+
+  document.getElementById('confirm-modal').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeConfirmModal() {
+  document.getElementById('confirm-modal').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+// Close modal on backdrop click
+document.getElementById('confirm-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeConfirmModal();
+});
+
+// ── CONFIRM & SEND ────────────────────────────────────────────
+async function confirmAndSend() {
+  closeConfirmModal();
+
+  const nombre   = document.getElementById('nombre').value.trim();
+  const apellido = document.getElementById('apellido').value.trim();
+  const telefono = selectedCode.code + ' ' + document.getElementById('telefono').value.trim();
+  const email    = document.getElementById('email').value.trim();
+  const fullName = nombre + ' ' + apellido;
+
+  const selected = BOOKS.filter(b => quantities[b.ref] > 0)
+    .map(b => ({ ref: b.ref, desc: b.desc, grade: b.grade, qty: quantities[b.ref], usd: b.usd, subtotal: (quantities[b.ref] * b.usd).toFixed(2) }));
+  const total = selected.reduce((s, b) => s + parseFloat(b.subtotal), 0).toFixed(2);
+
+  document.getElementById('loading-overlay').classList.add('active');
+  document.getElementById('btn-submit').disabled = true;
+
+  try {
+    await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nombre: fullName, apellido, telefono, email,
+        libros: selected, total,
+        fecha: new Date().toLocaleString('es-VE', { timeZone: 'America/Caracas' })
+      })
+    });
+    document.getElementById('loading-overlay').classList.remove('active');
+    document.getElementById('form-content').style.display = 'none';
+    document.getElementById('submit-bar').style.display = 'none';
+    document.getElementById('success-screen').style.display = 'block';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch(err) {
+    document.getElementById('loading-overlay').classList.remove('active');
+    document.getElementById('btn-submit').disabled = false;
+    alert('Hubo un error al enviar. Por favor intenta de nuevo.');
+  }
+}
+
+// ── INIT ──────────────────────────────────────────────────────
+buildCatalog();
+</script>
+</body>
+</html>

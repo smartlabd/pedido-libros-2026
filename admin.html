@@ -90,13 +90,30 @@
   .familia-header.open .familia-chevron{transform:rotate(180deg);color:rgba(255,255,255,0.5);}
   .familia-body{display:none;border-top:1px solid var(--gray-200);}
   .familia-body.open{display:block;}
-  .familia-item{display:grid;grid-template-columns:1fr 60px 60px 70px;gap:8px;align-items:center;padding:9px 18px;border-bottom:1px solid var(--gray-100);font-size:13px;}
+  .familia-item{display:grid;grid-template-columns:1fr 60px 60px 70px 36px;gap:8px;align-items:center;padding:9px 18px;border-bottom:1px solid var(--gray-100);font-size:13px;}
   .familia-item:last-child{border-bottom:none;}
   .familia-item .item-grade{font-size:11px;color:var(--gray-400);}
   .familia-item .item-qty,.familia-item .item-price,.familia-item .item-sub{text-align:right;font-weight:600;color:var(--navy);}
   .familia-item .item-price{font-weight:400;color:var(--gray-600);}
-  .familia-item-header{display:grid;grid-template-columns:1fr 60px 60px 70px;gap:8px;padding:7px 18px;background:var(--gray-100);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--gray-400);}
+  .familia-item-header{display:grid;grid-template-columns:1fr 60px 60px 70px 36px;gap:8px;padding:7px 18px;background:var(--gray-100);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--gray-400);}
   .familia-item-header span:not(:first-child){text-align:right;}
+  .btn-delete{background:none;border:none;cursor:pointer;font-size:15px;padding:4px;border-radius:6px;transition:background 0.15s;line-height:1;color:var(--gray-400);}
+  .btn-delete:hover{background:var(--red-light);color:var(--red);}
+
+  /* DELETE CONFIRM MODAL */
+  #delete-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:600;align-items:center;justify-content:center;padding:24px;}
+  #delete-modal.active{display:flex;}
+  .delete-box{background:white;border-radius:16px;padding:28px 24px;width:100%;max-width:400px;text-align:center;}
+  .delete-box .del-icon{font-size:40px;margin-bottom:12px;}
+  .delete-box h3{font-size:17px;font-weight:700;color:var(--navy);margin-bottom:8px;}
+  .delete-box .del-desc{font-size:13px;color:var(--gray-600);line-height:1.5;margin-bottom:6px;}
+  .delete-box .del-family{font-size:12px;color:var(--gray-400);margin-bottom:24px;}
+  .delete-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .btn-cancel-del{padding:12px;background:var(--gray-100);color:var(--gray-800);border:none;border-radius:10px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;}
+  .btn-cancel-del:hover{background:var(--gray-200);}
+  .btn-confirm-del{padding:12px;background:var(--red);color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;transition:background 0.15s;}
+  .btn-confirm-del:hover{background:#b91c1c;}
+  .btn-confirm-del:disabled{background:var(--gray-200);color:var(--gray-400);cursor:not-allowed;}
 
   /* LIBROS TABLE */
   .libros-table{background:white;border-radius:12px;border:1px solid var(--gray-200);overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04);}
@@ -231,6 +248,20 @@
   </div>
 </div>
 
+<!-- DELETE CONFIRM MODAL -->
+<div id="delete-modal">
+  <div class="delete-box">
+    <div class="del-icon">🗑️</div>
+    <h3>Eliminar item del pedido</h3>
+    <div class="del-desc" id="del-desc">¿Estás seguro que deseas eliminar este libro del pedido?</div>
+    <div class="del-family" id="del-family"></div>
+    <div class="delete-actions">
+      <button class="btn-cancel-del" onclick="closeDeleteModal()">Cancelar</button>
+      <button class="btn-confirm-del" id="btn-confirm-del" onclick="confirmDelete()">Sí, eliminar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ── CONFIG ────────────────────────────────────────────────────
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwOIp9IVoyaWA_GdChcoMDJwtFGI8nLhkKE1s9igWFafl4Fk89E99iBZRkoM45kNJrd/exec';
@@ -347,12 +378,13 @@ function renderFamilias() {
   }
 
   document.getElementById('familias-list').innerHTML = list.map((f, i) => {
-    const items = f.libros.map(l => `
-      <div class="familia-item">
+    const items = f.libros.map((l, li) => `
+      <div class="familia-item" id="item-${i}-${li}">
         <div><div>${l.desc}</div><div class="item-grade">${l.grado}</div></div>
         <div class="item-qty">${l.qty}</div>
         <div class="item-price">$${l.usd.toFixed(2)}</div>
         <div class="item-sub">$${l.subtotal.toFixed(2)}</div>
+        <button class="btn-delete" title="Eliminar item" onclick="openDeleteModal(${i}, ${li})">🗑️</button>
       </div>`).join('');
 
     return `
@@ -362,16 +394,95 @@ function renderFamilias() {
             <div class="familia-name">${f.nombre}</div>
             <div class="familia-tel">${f.telefono} · ${f.fecha || ''}</div>
           </div>
-          <div class="familia-total">$${f.total.toFixed(2)}</div>
+          <div class="familia-total" id="ftotal-${i}">$${f.total.toFixed(2)}</div>
           <div class="familia-chevron">▼</div>
         </div>
         <div class="familia-body" id="fb-${i}">
-          <div class="familia-item-header"><span>Libro</span><span>Cant.</span><span>Precio</span><span>Subtotal</span></div>
+          <div class="familia-item-header"><span>Libro</span><span>Cant.</span><span>Precio</span><span>Subtotal</span><span></span></div>
           ${items}
         </div>
       </div>`;
   }).join('');
 }
+
+// ── DELETE ITEM ───────────────────────────────────────────────
+let pendingDelete = null; // { familiaIdx, libroIdx }
+
+function openDeleteModal(familiaIdx, libroIdx) {
+  const f = allData.familias[familiaIdx];
+  const l = f.libros[libroIdx];
+  pendingDelete = { familiaIdx, libroIdx };
+  document.getElementById('del-desc').textContent = `¿Eliminar "${l.desc}" del pedido?`;
+  document.getElementById('del-family').textContent = `Familia: ${f.nombre} · ${l.qty} × $${l.usd.toFixed(2)} = $${l.subtotal.toFixed(2)}`;
+  document.getElementById('btn-confirm-del').disabled = false;
+  document.getElementById('btn-confirm-del').textContent = 'Sí, eliminar';
+  document.getElementById('delete-modal').classList.add('active');
+}
+
+function closeDeleteModal() {
+  document.getElementById('delete-modal').classList.remove('active');
+  pendingDelete = null;
+}
+
+async function confirmDelete() {
+  if (!pendingDelete) return;
+  const { familiaIdx, libroIdx } = pendingDelete;
+  const f = allData.familias[familiaIdx];
+  const l = f.libros[libroIdx];
+
+  const btn = document.getElementById('btn-confirm-del');
+  btn.disabled = true;
+  btn.textContent = 'Eliminando…';
+
+  try {
+    const url = APPS_SCRIPT_URL +
+      '?action=deleteItem' +
+      '&clave=' + encodeURIComponent(claveAdmin) +
+      '&familia=' + encodeURIComponent(f.nombre) +
+      '&ref=' + encodeURIComponent(l.ref) +
+      '&email=' + encodeURIComponent(f.email || '') +
+      '&telefono=' + encodeURIComponent(f.telefono || '');
+
+    const r = await fetch(url);
+    const d = await r.json();
+
+    if (!d.ok) throw new Error(d.error || 'Error desconocido');
+
+    // Update local state
+    f.libros.splice(libroIdx, 1);
+    f.total = f.libros.reduce((s, b) => s + b.subtotal, 0);
+    allData.totalGlobal = allData.familias.reduce((s, fam) => s + fam.total, 0);
+
+    closeDeleteModal();
+    renderFamilias();
+    renderKPIs();
+
+    // Re-open the accordion
+    setTimeout(() => {
+      const h = document.getElementById('fh-' + familiaIdx);
+      const b = document.getElementById('fb-' + familiaIdx);
+      if (h && !h.classList.contains('open')) { h.classList.add('open'); b.classList.add('open'); }
+    }, 50);
+
+  } catch(err) {
+    btn.disabled = false;
+    btn.textContent = 'Sí, eliminar';
+    alert('Error al eliminar: ' + err.message);
+  }
+}
+
+function renderKPIs() {
+  const totalUnidades = allData.libros.reduce((s,l) => s + l.qty, 0);
+  document.getElementById('kpi-total').textContent = '$' + allData.totalGlobal.toFixed(2);
+  document.getElementById('kpi-familias').textContent = allData.familias.length;
+  document.getElementById('kpi-titulos').textContent = allData.libros.length;
+  document.getElementById('kpi-unidades').textContent = totalUnidades;
+}
+
+// Close delete modal on backdrop click
+document.getElementById('delete-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeDeleteModal();
+});
 
 function toggleFamilia(i) {
   const h = document.getElementById('fh-' + i);

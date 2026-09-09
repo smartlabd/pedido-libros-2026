@@ -186,6 +186,7 @@
   .bulk-del:hover{background:#b91c1c;}
   .bulk-link{background:none!important;color:rgba(255,255,255,0.7)!important;text-decoration:underline;padding:9px 4px!important;font-weight:600!important;}
   .bulk-link:hover{color:white!important;}
+  #bulk-bar button:disabled{opacity:0.4;cursor:not-allowed;}
 </style>
 </head>
 <body>
@@ -589,8 +590,12 @@ function clearSelection() {
 
 function updateBulkBar() {
   const n = selectedFamilias.size;
-  document.getElementById('bulk-bar').classList.toggle('active', selectMode && n > 0);
+  // La barra aparece apenas se activa el modo selección, así el botón
+  // "Seleccionar todos" está disponible aunque todavía no haya nada marcado.
+  document.getElementById('bulk-bar').classList.toggle('active', selectMode);
   document.getElementById('bulk-count').textContent = n + (n === 1 ? ' seleccionado' : ' seleccionados');
+  document.querySelectorAll('#bulk-bar .bulk-set, #bulk-bar .bulk-del')
+    .forEach(b => { b.disabled = (n === 0); });
 }
 
 async function bulkSetEstado(estado) {

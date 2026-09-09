@@ -19,6 +19,9 @@
 const EMAIL_NOTIFICACION = 'directorclassical@gmail.com';
 const NOMBRE_HOJA        = 'Pedidos';
 const CLAVE_ADMIN        = 'libros2026'; // Cambia esto por tu contraseña
+const ESTADOS_VALIDOS    = ['Pendiente', 'Pagado', 'Entregado'];
+const ESTADO_POR_DEFECTO = 'Pendiente';
+const COL_ESTADO         = 10; // columna J
 
 // ------------------------------------------------------------
 // GET — panel admin o ping
@@ -76,6 +79,46 @@ function doGet(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
   }
+
+  // Cambiar estado de una o varias familias (individual o en lote)
+  if (action === 'setEstado') {
+    const clave = e.parameter.clave || '';
+    if (clave !== CLAVE_ADMIN) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: false, error: 'Acceso no autorizado' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    try {
+      const result = setEstadoFamilias(e.parameter.familias || '[]', e.parameter.estado || '');
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: true, ...result }))
+        .setMimeType(ContentService.MimeType.JSON);
+    } catch(err) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: false, error: err.message }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
+  // Borrar en lote todos los pedidos de una o varias familias
+  if (action === 'deleteFamilias') {
+    const clave = e.parameter.clave || '';
+    if (clave !== CLAVE_ADMIN) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: false, error: 'Acceso no autorizado' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    try {
+      const result = eliminarFamilias(e.parameter.familias || '[]');
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: true, ...result }))
+        .setMimeType(ContentService.MimeType.JSON);
+    } catch(err) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: false, error: err.message }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+  }
 }
 
 // ------------------------------------------------------------
@@ -105,26 +148,38 @@ function guardarPedido(data) {
 
   if (!sheet) {
     sheet = ss.insertSheet(NOMBRE_HOJA);
-    sheet.appendRow(['Fecha','Familia','Teléfono','Ref','Grado','Descripción','Cantidad','Precio USD','Subtotal USD']);
-    sheet.getRange(1,1,1,9).setFontWeight('bold').setBackground('#1a2744').setFontColor('#ffffff');
+    sheet.appendRow(['Fecha','Familia','Teléfono','Ref','Grado','Descripción','Cantidad','Precio USD','Subtotal USD','Estado']);
+    sheet.getRange(1,1,1,10).setFontWeight('bold').setBackground('#1a2744').setFontColor('#ffffff');
     sheet.setFrozenRows(1);
-    sheet.setColumnWidths(1, 9, 120);
+    sheet.setColumnWidths(1, 10, 120);
     sheet.setColumnWidth(6, 320);
   }
+  asegurarColumnaEstado(sheet);
 
   data.libros.forEach(libro => {
     sheet.appendRow([
       data.fecha, data.nombre, "'" + data.telefono,
       libro.ref, libro.grade, libro.desc,
-      libro.qty, parseFloat(libro.usd), parseFloat(libro.subtotal)
+      libro.qty, parseFloat(libro.usd), parseFloat(libro.subtotal), ESTADO_POR_DEFECTO
     ]);
   });
 
   // Fila de total de familia
-  const totalRow = ['', '★ ' + data.nombre, "'" + data.telefono, '', '', 'TOTAL FAMILIA', '', '', parseFloat(data.total)];
+  const totalRow = ['', '★ ' + data.nombre, "'" + data.telefono, '', '', 'TOTAL FAMILIA', '', '', parseFloat(data.total), ESTADO_POR_DEFECTO];
   sheet.appendRow(totalRow);
   const lr = sheet.getLastRow();
-  sheet.getRange(lr, 1, 1, 9).setBackground('#f5e6c8').setFontWeight('bold');
+  sheet.getRange(lr, 1, 1, 10).setBackground('#f5e6c8').setFontWeight('bold');
+}
+
+// ------------------------------------------------------------
+// ASEGURAR COLUMNA "Estado" (migración suave de hojas viejas)
+// ------------------------------------------------------------
+function asegurarColumnaEstado(sheet) {
+  const encabezado = String(sheet.getRange(1, COL_ESTADO).getValue()).trim();
+  if (encabezado !== 'Estado') {
+    sheet.getRange(1, COL_ESTADO).setValue('Estado')
+      .setFontWeight('bold').setBackground('#1a2744').setFontColor('#ffffff');
+  }
 }
 
 // ------------------------------------------------------------
@@ -136,20 +191,25 @@ function obtenerDatos() {
   if (!sheet || sheet.getLastRow() < 2) {
     return { familias: [], libros: [], totalGlobal: 0 };
   }
+  asegurarColumnaEstado(sheet);
 
-  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 9).getValues();
+  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 10).getValues();
 
-  const familiasMap = {};   // nombre -> { nombre, telefono, fecha, libros[], total }
+  const familiasMap = {};   // nombre -> { nombre, telefono, fecha, estado, libros[], total }
   const librosMap   = {};   // ref    -> { ref, grade, desc, qty, total }
 
   rows.forEach(row => {
-    const [fecha, familia, tel, ref, grado, desc, qty, precio, subtotal] = row;
+    const [fecha, familia, tel, ref, grado, desc, qty, precio, subtotal, estado] = row;
 
     if (!ref || ref === '') return; // fila de total, skip
 
     // Por familia
     if (!familiasMap[familia]) {
-      familiasMap[familia] = { nombre: familia, telefono: tel, fecha: fecha, libros: [], total: 0 };
+      familiasMap[familia] = {
+        nombre: familia, telefono: tel, fecha: fecha,
+        estado: (estado && String(estado).trim()) || ESTADO_POR_DEFECTO,
+        libros: [], total: 0
+      };
     }
     familiasMap[familia].libros.push({ ref, grado, desc, qty: parseInt(qty), usd: parseFloat(precio), subtotal: parseFloat(subtotal) });
     familiasMap[familia].total += parseFloat(subtotal);
@@ -319,6 +379,107 @@ function eliminarItem(familia, ref, emailFamilia, telefonoFamilia) {
 }
 
 
+// ------------------------------------------------------------
+// CAMBIAR ESTADO DE UNA O VARIAS FAMILIAS
+// familiasJson: JSON string con array de nombres de familia
+// ------------------------------------------------------------
+function setEstadoFamilias(familiasJson, estado) {
+  if (ESTADOS_VALIDOS.indexOf(estado) === -1) {
+    throw new Error('Estado inválido: ' + estado);
+  }
+  let familias;
+  try { familias = JSON.parse(familiasJson); }
+  catch(e) { throw new Error('Lista de familias inválida'); }
+  if (!Array.isArray(familias) || familias.length === 0) {
+    throw new Error('Sin familias para actualizar');
+  }
+
+  const ss    = SpreadsheetApp.openById('1eZDkyjuHYCA0XByAxlx2hUcPetneWrJTl_I74rQP7bU');
+  const sheet = ss.getSheetByName(NOMBRE_HOJA);
+  if (!sheet) throw new Error('Hoja no encontrada');
+  asegurarColumnaEstado(sheet);
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) throw new Error('No hay datos');
+
+  const objetivos  = familias.map(f => String(f).trim());
+  const nFilas     = lastRow - 1;
+  const columnaFam = sheet.getRange(2, 2, nFilas, 1).getValues();
+  const columnaEst = sheet.getRange(2, COL_ESTADO, nFilas, 1).getValues();
+
+  let actualizadas = 0;
+  for (let i = 0; i < columnaFam.length; i++) {
+    if (objetivos.indexOf(nombreFamiliaPlano_(columnaFam[i][0])) !== -1) {
+      columnaEst[i][0] = estado;
+      actualizadas++;
+    }
+  }
+  sheet.getRange(2, COL_ESTADO, nFilas, 1).setValues(columnaEst);
+
+  MailApp.sendEmail({
+    to: EMAIL_NOTIFICACION,
+    subject: '✏️ Estado → ' + estado + ' · ' + familias.length + ' familia(s)',
+    body:
+      'Se cambió el estado a "' + estado + '" para:\n\n' +
+      familias.map(f => '  • ' + f).join('\n') + '\n\n' +
+      'Filas actualizadas en la hoja: ' + actualizadas
+  });
+
+  return { estado: estado, familias: familias, filasActualizadas: actualizadas };
+}
+
+// ------------------------------------------------------------
+// BORRAR EN LOTE TODOS LOS PEDIDOS DE VARIAS FAMILIAS
+// (elimina las filas de libros y la fila ★ TOTAL de cada familia)
+// ------------------------------------------------------------
+function eliminarFamilias(familiasJson) {
+  let familias;
+  try { familias = JSON.parse(familiasJson); }
+  catch(e) { throw new Error('Lista de familias inválida'); }
+  if (!Array.isArray(familias) || familias.length === 0) {
+    throw new Error('Sin familias para eliminar');
+  }
+
+  const ss    = SpreadsheetApp.openById('1eZDkyjuHYCA0XByAxlx2hUcPetneWrJTl_I74rQP7bU');
+  const sheet = ss.getSheetByName(NOMBRE_HOJA);
+  if (!sheet) throw new Error('Hoja no encontrada');
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) throw new Error('No hay datos');
+
+  const objetivos  = familias.map(f => String(f).trim());
+  const columnaFam = sheet.getRange(2, 2, lastRow - 1, 1).getValues();
+
+  const filas = [];
+  for (let i = 0; i < columnaFam.length; i++) {
+    if (objetivos.indexOf(nombreFamiliaPlano_(columnaFam[i][0])) !== -1) {
+      filas.push(i + 2); // +2: los datos empiezan en la fila 2
+    }
+  }
+  if (filas.length === 0) throw new Error('No se encontraron filas para esas familias');
+
+  // Borrar de abajo hacia arriba para no desplazar los índices restantes
+  filas.sort((a, b) => b - a).forEach(r => sheet.deleteRow(r));
+
+  MailApp.sendEmail({
+    to: EMAIL_NOTIFICACION,
+    subject: '🗑️ Pedidos eliminados en lote · ' + familias.length + ' familia(s)',
+    body:
+      'Se eliminaron por completo los pedidos de:\n\n' +
+      familias.map(f => '  • ' + f).join('\n') + '\n\n' +
+      'Filas eliminadas en la hoja: ' + filas.length
+  });
+
+  return { familias: familias, filasEliminadas: filas.length };
+}
+
+// Devuelve el nombre de familia sin el prefijo ★ de la fila de total
+function nombreFamiliaPlano_(valorCelda) {
+  const s = String(valorCelda).trim();
+  return s.charAt(0) === '★' ? s.replace(/^★\s*/, '').trim() : s;
+}
+
+
 function testPedido() {
   guardarPedido({
     nombre: 'Familia Test', telefono: '+58 414 1234567',
@@ -339,4 +500,15 @@ function testEmail() {
     libros: [{ ref: '20511', grade: 'Grado 1', desc: 'Estudios Sociales Alumno', qty: 2, usd: 11.71, subtotal: '23.42' }]
   });
   Logger.log('Emails enviados');
+}
+
+// Corre testPedido() primero para tener la "Familia Test" en la hoja.
+function testSetEstado() {
+  const r = setEstadoFamilias(JSON.stringify(['Familia Test']), 'Pagado');
+  Logger.log(JSON.stringify(r));
+}
+
+function testDeleteFamilias() {
+  const r = eliminarFamilias(JSON.stringify(['Familia Test']));
+  Logger.log(JSON.stringify(r));
 }

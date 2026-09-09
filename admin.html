@@ -151,6 +151,41 @@
     .familia-item,.familia-item-header{grid-template-columns:1fr 50px 70px;}
     .familia-item .item-price,.familia-item-header span:nth-child(3){display:none;}
   }
+
+  /* ESTADO FILTER PILLS */
+  .estado-filters{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:18px;}
+  .estado-pill{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid var(--gray-200);background:white;color:var(--gray-600);transition:all 0.15s;}
+  .estado-pill:hover{border-color:var(--navy);}
+  .estado-pill.active{background:var(--navy);color:white;border-color:var(--navy);}
+  .estado-pill .pill-count{opacity:0.55;margin-left:5px;font-weight:400;}
+
+  /* ESTADO BADGE + SELECT (por familia) */
+  .estado-badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;}
+  .estado-badge.Pendiente{background:var(--red-light);color:var(--red);}
+  .estado-badge.Pagado{background:var(--blue-light);color:var(--blue);}
+  .estado-badge.Entregado{background:var(--green-light);color:var(--green);}
+  .familia-header.open .estado-badge{filter:brightness(1.05);}
+  .estado-select{font-family:inherit;font-size:12px;font-weight:600;border:1.5px solid var(--gray-200);border-radius:8px;padding:4px 6px;background:white;color:var(--gray-800);cursor:pointer;}
+
+  /* SELECT MODE / BULK */
+  .familias-toolbar{display:flex;align-items:center;gap:10px;}
+  .btn-select-mode{padding:6px 14px;background:white;border:1.5px solid var(--gray-200);border-radius:8px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;color:var(--gray-600);}
+  .btn-select-mode.active{background:var(--navy);color:white;border-color:var(--navy);}
+  .fam-check{width:18px;height:18px;accent-color:var(--navy);cursor:pointer;flex-shrink:0;}
+  .familia-header.selectable{grid-template-columns:auto 1fr auto auto;}
+
+  #bulk-bar{position:fixed;bottom:0;left:0;right:0;background:var(--navy);color:white;padding:12px 20px;box-shadow:0 -4px 20px rgba(0,0,0,0.25);z-index:300;display:none;}
+  #bulk-bar.active{display:block;}
+  .bulk-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .bulk-count{font-size:13px;font-weight:800;color:var(--gold);white-space:nowrap;}
+  .bulk-inner .spacer{flex:1;}
+  .bulk-inner button{padding:9px 13px;border-radius:8px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;border:none;}
+  .bulk-set{background:rgba(255,255,255,0.14);color:white;border:1px solid rgba(255,255,255,0.25)!important;}
+  .bulk-set:hover{background:rgba(255,255,255,0.26);}
+  .bulk-del{background:var(--red);color:white;}
+  .bulk-del:hover{background:#b91c1c;}
+  .bulk-link{background:none!important;color:rgba(255,255,255,0.7)!important;text-decoration:underline;padding:9px 4px!important;font-weight:600!important;}
+  .bulk-link:hover{color:white!important;}
 </style>
 </head>
 <body>
@@ -208,6 +243,9 @@
       </div>
     </div>
 
+    <!-- ESTADO FILTER -->
+    <div class="estado-filters" id="estado-filters"></div>
+
     <!-- TABS -->
     <div class="tabs">
       <button class="tab active" onclick="switchTab('familias')">👨‍👩‍👧 Por familia</button>
@@ -218,7 +256,10 @@
     <div id="tab-familias" class="active">
       <div class="section-header">
         <div class="section-title">Pedidos por familia</div>
-        <div class="section-count" id="count-familias">0 familias</div>
+        <div class="familias-toolbar">
+          <button class="btn-select-mode" id="btn-select-mode" onclick="toggleSelectMode()">☑ Seleccionar</button>
+          <div class="section-count" id="count-familias">0 familias</div>
+        </div>
       </div>
       <div class="search-bar">
         <span class="icon">🔍</span>
@@ -248,6 +289,20 @@
   </div>
 </div>
 
+<!-- BULK ACTION BAR -->
+<div id="bulk-bar">
+  <div class="bulk-inner">
+    <span class="bulk-count" id="bulk-count">0 seleccionados</span>
+    <button class="bulk-link" onclick="selectAllFamilias()">Seleccionar todos</button>
+    <button class="bulk-link" onclick="clearSelection()">Limpiar</button>
+    <span class="spacer"></span>
+    <button class="bulk-set" onclick="bulkSetEstado('Pendiente')">→ Pendiente</button>
+    <button class="bulk-set" onclick="bulkSetEstado('Pagado')">→ Pagado</button>
+    <button class="bulk-set" onclick="bulkSetEstado('Entregado')">→ Entregado</button>
+    <button class="bulk-del" onclick="openBulkDeleteModal()">🗑️ Eliminar</button>
+  </div>
+</div>
+
 <!-- DELETE CONFIRM MODAL -->
 <div id="delete-modal">
   <div class="delete-box">
@@ -267,9 +322,38 @@
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwOIp9IVoyaWA_GdChcoMDJwtFGI8nLhkKE1s9igWFafl4Fk89E99iBZRkoM45kNJrd/exec';
 
 // ── STATE ─────────────────────────────────────────────────────
+const ESTADOS = ['Pendiente', 'Pagado', 'Entregado'];
 let allData = null;
 let activeGrade = 'Todos';
+let estadoFilter = 'Pendiente';        // al cargar la página se muestran los pendientes
 let claveAdmin = '';
+let selectMode = false;
+const selectedFamilias = new Set();     // nombres de familia seleccionados para acciones en lote
+
+// Escapa un nombre para usarlo dentro de onclick="fn('...')" en atributos HTML
+function escAttr(s) {
+  return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
+// Familias que pasan el filtro de estado activo
+function familiasFiltradas() {
+  return allData.familias.filter(f =>
+    estadoFilter === 'Todos' || (f.estado || 'Pendiente') === estadoFilter
+  );
+}
+
+// Reconstruye el consolidado "por libro" a partir de un conjunto de familias
+function consolidarLibros(familias) {
+  const map = {};
+  familias.forEach(f => f.libros.forEach(l => {
+    const grade = l.grade || l.grado;
+    if (!map[l.ref]) map[l.ref] = { ref: l.ref, grade: grade, desc: l.desc, qty: 0, total: 0 };
+    map[l.ref].qty   += l.qty;
+    map[l.ref].total += l.subtotal;
+  }));
+  const gradeOrder = ['Preescolar','Grado 1','Grado 2','Grado 3','Grado 4','Grado 5','Grado 6','Grado 7','Grado 8','Grado 9'];
+  return Object.values(map).sort((a,b) => gradeOrder.indexOf(a.grade) - gradeOrder.indexOf(b.grade));
+}
 
 // ── LOGIN ─────────────────────────────────────────────────────
 async function doLogin() {
@@ -336,23 +420,56 @@ async function loadData() {
 // ── RENDER ALL ────────────────────────────────────────────────
 function renderAll() {
   if (!allData) return;
-  const { familias, libros, totalGlobal } = allData;
+  renderEstadoFilters();
+  renderKPIs();
+  renderGradeFilters();
+  renderFamilias();
+  renderLibros();
+}
 
-  // KPIs
-  const totalUnidades = libros.reduce((s,l) => s + l.qty, 0);
-  document.getElementById('kpi-total').textContent = '$' + totalGlobal.toFixed(2);
+// Pills de filtro por estado, con conteo de familias por estado
+function renderEstadoFilters() {
+  const counts = { Pendiente: 0, Pagado: 0, Entregado: 0 };
+  allData.familias.forEach(f => {
+    const e = f.estado || 'Pendiente';
+    if (counts[e] !== undefined) counts[e]++;
+  });
+  const opciones = [
+    ['Pendiente', counts.Pendiente],
+    ['Pagado',    counts.Pagado],
+    ['Entregado', counts.Entregado],
+    ['Todos',     allData.familias.length],
+  ];
+  document.getElementById('estado-filters').innerHTML = opciones.map(([name, n]) =>
+    `<button class="estado-pill ${name === estadoFilter ? 'active' : ''}" onclick="setEstadoFilter('${name}')">${name}<span class="pill-count">${n}</span></button>`
+  ).join('');
+}
+
+function setEstadoFilter(name) {
+  estadoFilter = name;
+  clearSelection();
+  renderAll();
+}
+
+// KPIs calculados sobre las familias que pasan el filtro de estado
+function renderKPIs() {
+  const familias = familiasFiltradas();
+  const libros   = consolidarLibros(familias);
+  const totalGlobal   = familias.reduce((s, f) => s + f.total, 0);
+  const totalUnidades = libros.reduce((s, l) => s + l.qty, 0);
+  document.getElementById('kpi-total').textContent    = '$' + totalGlobal.toFixed(2);
   document.getElementById('kpi-familias').textContent = familias.length;
-  document.getElementById('kpi-titulos').textContent = libros.length;
+  document.getElementById('kpi-titulos').textContent  = libros.length;
   document.getElementById('kpi-unidades').textContent = totalUnidades;
+}
 
-  // Grade filter pills
+function renderGradeFilters() {
+  const libros = consolidarLibros(familiasFiltradas());
   const grades = ['Todos', ...new Set(libros.map(l => l.grade))];
+  if (grades.indexOf(activeGrade) === -1) activeGrade = 'Todos';
   document.getElementById('grade-filters').innerHTML = grades.map(g =>
     `<button class="grade-pill ${g === activeGrade ? 'active' : ''}" onclick="setGrade('${g}')">${g}</button>`
   ).join('');
-
-  renderFamilias();
-  renderLibros();
 }
 
 function setGrade(grade) {
@@ -365,7 +482,7 @@ function setGrade(grade) {
 function renderFamilias() {
   if (!allData) return;
   const q = document.getElementById('search-familias').value.toLowerCase();
-  const list = allData.familias.filter(f =>
+  const list = familiasFiltradas().filter(f =>
     f.nombre.toLowerCase().includes(q) || f.telefono.toLowerCase().includes(q)
   );
 
@@ -377,22 +494,37 @@ function renderFamilias() {
     return;
   }
 
-  document.getElementById('familias-list').innerHTML = list.map((f, i) => {
+  document.getElementById('familias-list').innerHTML = list.map((f) => {
+    const i = allData.familias.indexOf(f);     // índice estable en el array original
+    const estado = f.estado || 'Pendiente';
+    const na = escAttr(f.nombre);
+
     const items = f.libros.map((l, li) => `
       <div class="familia-item" id="item-${i}-${li}">
-        <div><div>${l.desc}</div><div class="item-grade">${l.grado}</div></div>
+        <div><div>${l.desc}</div><div class="item-grade">${l.grado || l.grade}</div></div>
         <div class="item-qty">${l.qty}</div>
         <div class="item-price">$${l.usd.toFixed(2)}</div>
         <div class="item-sub">$${l.subtotal.toFixed(2)}</div>
         <button class="btn-delete" title="Eliminar item" onclick="openDeleteModal(${i}, ${li})">🗑️</button>
       </div>`).join('');
 
+    const check = selectMode
+      ? `<input type="checkbox" class="fam-check" ${selectedFamilias.has(f.nombre) ? 'checked' : ''} onclick="event.stopPropagation();toggleSelect('${na}')">`
+      : '';
+
     return `
       <div class="familia-card">
-        <div class="familia-header" id="fh-${i}" onclick="toggleFamilia(${i})">
+        <div class="familia-header ${selectMode ? 'selectable' : ''}" id="fh-${i}" onclick="toggleFamilia(${i})">
+          ${check}
           <div>
             <div class="familia-name">${f.nombre}</div>
             <div class="familia-tel">${f.telefono} · ${f.fecha || ''}</div>
+            <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <span class="estado-badge ${estado}">${estado}</span>
+              <select class="estado-select" onclick="event.stopPropagation()" onchange="changeEstado('${na}', this.value)">
+                ${ESTADOS.map(e => `<option ${e === estado ? 'selected' : ''}>${e}</option>`).join('')}
+              </select>
+            </div>
           </div>
           <div class="familia-total" id="ftotal-${i}">$${f.total.toFixed(2)}</div>
           <div class="familia-chevron">▼</div>
@@ -403,6 +535,80 @@ function renderFamilias() {
         </div>
       </div>`;
   }).join('');
+}
+
+// ── ESTADO: cambio individual ─────────────────────────────────
+async function changeEstado(nombre, estado) {
+  try {
+    const url = APPS_SCRIPT_URL + '?action=setEstado' +
+      '&clave=' + encodeURIComponent(claveAdmin) +
+      '&familias=' + encodeURIComponent(JSON.stringify([nombre])) +
+      '&estado=' + encodeURIComponent(estado);
+    const r = await fetch(url);
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'Error desconocido');
+
+    const fam = allData.familias.find(f => f.nombre === nombre);
+    if (fam) fam.estado = estado;
+    renderAll();
+  } catch(err) {
+    alert('No se pudo cambiar el estado: ' + err.message);
+    renderFamilias();
+  }
+}
+
+// ── MODO SELECCIÓN / ACCIONES EN LOTE ─────────────────────────
+function toggleSelectMode() {
+  selectMode = !selectMode;
+  document.getElementById('btn-select-mode').classList.toggle('active', selectMode);
+  if (!selectMode) selectedFamilias.clear();
+  updateBulkBar();
+  renderFamilias();
+}
+
+function toggleSelect(nombre) {
+  if (selectedFamilias.has(nombre)) selectedFamilias.delete(nombre);
+  else selectedFamilias.add(nombre);
+  updateBulkBar();
+}
+
+function selectAllFamilias() {
+  const q = document.getElementById('search-familias').value.toLowerCase();
+  familiasFiltradas()
+    .filter(f => f.nombre.toLowerCase().includes(q) || f.telefono.toLowerCase().includes(q))
+    .forEach(f => selectedFamilias.add(f.nombre));
+  updateBulkBar();
+  renderFamilias();
+}
+
+function clearSelection() {
+  selectedFamilias.clear();
+  updateBulkBar();
+  if (selectMode) renderFamilias();
+}
+
+function updateBulkBar() {
+  const n = selectedFamilias.size;
+  document.getElementById('bulk-bar').classList.toggle('active', selectMode && n > 0);
+  document.getElementById('bulk-count').textContent = n + (n === 1 ? ' seleccionado' : ' seleccionados');
+}
+
+async function bulkSetEstado(estado) {
+  const familias = [...selectedFamilias];
+  if (familias.length === 0) return;
+  try {
+    const url = APPS_SCRIPT_URL + '?action=setEstado' +
+      '&clave=' + encodeURIComponent(claveAdmin) +
+      '&familias=' + encodeURIComponent(JSON.stringify(familias)) +
+      '&estado=' + encodeURIComponent(estado);
+    const r = await fetch(url);
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'Error desconocido');
+    clearSelection();
+    await loadData();
+  } catch(err) {
+    alert('Error al cambiar los estados: ' + err.message);
+  }
 }
 
 // ── DELETE ITEM ───────────────────────────────────────────────
@@ -419,12 +625,54 @@ function openDeleteModal(familiaIdx, libroIdx) {
   document.getElementById('delete-modal').classList.add('active');
 }
 
+let bulkDeleteMode = false;
+
 function closeDeleteModal() {
   document.getElementById('delete-modal').classList.remove('active');
   pendingDelete = null;
+  bulkDeleteMode = false;
+  document.querySelector('.delete-box h3').textContent = 'Eliminar item del pedido';
+}
+
+function openBulkDeleteModal() {
+  const familias = [...selectedFamilias];
+  if (familias.length === 0) return;
+  bulkDeleteMode = true;
+  pendingDelete = null;
+  document.querySelector('.delete-box h3').textContent = 'Eliminar pedidos completos';
+  document.getElementById('del-desc').textContent =
+    `¿Eliminar TODOS los pedidos de ${familias.length} ${familias.length === 1 ? 'familia' : 'familias'}? Esta acción no se puede deshacer.`;
+  document.getElementById('del-family').textContent = familias.join(' · ');
+  document.getElementById('btn-confirm-del').disabled = false;
+  document.getElementById('btn-confirm-del').textContent = 'Sí, eliminar todo';
+  document.getElementById('delete-modal').classList.add('active');
+}
+
+async function confirmBulkDelete() {
+  const familias = [...selectedFamilias];
+  if (familias.length === 0) { closeDeleteModal(); return; }
+  const btn = document.getElementById('btn-confirm-del');
+  btn.disabled = true;
+  btn.textContent = 'Eliminando…';
+  try {
+    const url = APPS_SCRIPT_URL + '?action=deleteFamilias' +
+      '&clave=' + encodeURIComponent(claveAdmin) +
+      '&familias=' + encodeURIComponent(JSON.stringify(familias));
+    const r = await fetch(url);
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'Error desconocido');
+    closeDeleteModal();
+    clearSelection();
+    await loadData();
+  } catch(err) {
+    btn.disabled = false;
+    btn.textContent = 'Sí, eliminar todo';
+    alert('Error al eliminar: ' + err.message);
+  }
 }
 
 async function confirmDelete() {
+  if (bulkDeleteMode) return confirmBulkDelete();
   if (!pendingDelete) return;
   const { familiaIdx, libroIdx } = pendingDelete;
   const f = allData.familias[familiaIdx];
@@ -454,8 +702,7 @@ async function confirmDelete() {
     allData.totalGlobal = allData.familias.reduce((s, fam) => s + fam.total, 0);
 
     closeDeleteModal();
-    renderFamilias();
-    renderKPIs();
+    renderAll();
 
     // Re-open the accordion
     setTimeout(() => {
@@ -469,14 +716,6 @@ async function confirmDelete() {
     btn.textContent = 'Sí, eliminar';
     alert('Error al eliminar: ' + err.message);
   }
-}
-
-function renderKPIs() {
-  const totalUnidades = allData.libros.reduce((s,l) => s + l.qty, 0);
-  document.getElementById('kpi-total').textContent = '$' + allData.totalGlobal.toFixed(2);
-  document.getElementById('kpi-familias').textContent = allData.familias.length;
-  document.getElementById('kpi-titulos').textContent = allData.libros.length;
-  document.getElementById('kpi-unidades').textContent = totalUnidades;
 }
 
 // Close delete modal on backdrop click
@@ -495,9 +734,10 @@ function toggleFamilia(i) {
 function renderLibros() {
   if (!allData) return;
   const q = document.getElementById('search-libros').value.toLowerCase();
-  const maxQty = Math.max(...allData.libros.map(l => l.qty), 1);
+  const consolidado = consolidarLibros(familiasFiltradas());
+  const maxQty = Math.max(...consolidado.map(l => l.qty), 1);
 
-  const list = allData.libros.filter(l => {
+  const list = consolidado.filter(l => {
     const gradeOk = activeGrade === 'Todos' || l.grade === activeGrade;
     const searchOk = l.desc.toLowerCase().includes(q) || l.ref.toLowerCase().includes(q);
     return gradeOk && searchOk;

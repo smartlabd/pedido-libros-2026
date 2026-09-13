@@ -171,6 +171,9 @@
   .familias-toolbar{display:flex;align-items:center;gap:10px;}
   .btn-select-mode{padding:6px 14px;background:white;border:1.5px solid var(--gray-200);border-radius:8px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;color:var(--gray-600);}
   .btn-select-mode.active{background:var(--navy);color:white;border-color:var(--navy);}
+  .btn-pdf{padding:6px 14px;background:white;border:1.5px solid var(--gray-200);border-radius:8px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;color:var(--navy);}
+  .btn-pdf:hover{background:var(--gold-light);border-color:var(--gold);}
+  .btn-pdf:disabled{opacity:0.5;cursor:not-allowed;}
   .fam-check{width:18px;height:18px;accent-color:var(--navy);cursor:pointer;flex-shrink:0;}
   .familia-header.selectable{grid-template-columns:auto 1fr auto auto;}
 
@@ -258,6 +261,7 @@
       <div class="section-header">
         <div class="section-title">Pedidos por familia</div>
         <div class="familias-toolbar">
+          <button class="btn-pdf" onclick="generarPDFPagados()">📄 PDF de pagados</button>
           <button class="btn-select-mode" id="btn-select-mode" onclick="toggleSelectMode()">☑ Seleccionar</button>
           <div class="section-count" id="count-familias">0 familias</div>
         </div>
@@ -318,6 +322,7 @@
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 // ── CONFIG ────────────────────────────────────────────────────
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwOIp9IVoyaWA_GdChcoMDJwtFGI8nLhkKE1s9igWFafl4Fk89E99iBZRkoM45kNJrd/exec';
@@ -556,6 +561,104 @@ async function changeEstado(nombre, estado) {
     alert('No se pudo cambiar el estado: ' + err.message);
     renderFamilias();
   }
+}
+
+// ── PDF DE PEDIDOS PAGADOS ─────────────────────────────────────
+function generarPDFPagados() {
+  if (!allData) return;
+  const pagados = allData.familias.filter(f => (f.estado || 'Pendiente') === 'Pagado');
+  if (pagados.length === 0) {
+    alert('No hay pedidos con estado "Pagado" todavía.');
+    return;
+  }
+  if (!window.jspdf) {
+    alert('No se pudo cargar el generador de PDF. Revisa tu conexión e intentá de nuevo.');
+    return;
+  }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const marginX = 40;
+  const marginBottom = 44;
+  let y = 50;
+
+  function saltarPaginaSiFalta(alturaNecesaria) {
+    if (y + alturaNecesaria > pageH - marginBottom) {
+      doc.addPage();
+      y = 50;
+    }
+  }
+
+  // Encabezado del documento
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(26, 39, 68);
+  doc.text('Pedidos Pagados — Catálogo Escolar 2026', marginX, y);
+  y += 16;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(120);
+  doc.text(
+    'Generado: ' + new Date().toLocaleString('es-VE') + '  ·  ' + pagados.length +
+    (pagados.length === 1 ? ' familia' : ' familias'),
+    marginX, y
+  );
+  doc.setTextColor(0);
+  y += 22;
+
+  let granTotal = 0;
+  const ordenados = pagados.slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+
+  ordenados.forEach(f => {
+    saltarPaginaSiFalta(60);
+
+    doc.setDrawColor(210); doc.setLineWidth(0.75);
+    doc.line(marginX, y, pageW - marginX, y);
+    y += 16;
+
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(26, 39, 68);
+    doc.text(f.nombre, marginX, y);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(200, 146, 42);
+    doc.text('$' + f.total.toFixed(2), pageW - marginX, y, { align: 'right' });
+    y += 13;
+
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(90);
+    doc.text((f.telefono || '') + '   ·   ' + (f.fecha || ''), marginX, y);
+    doc.setTextColor(0);
+    y += 14;
+
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(140);
+    doc.text('LIBRO', marginX, y);
+    doc.text('GRADO', marginX + 250, y);
+    doc.text('CANT.', marginX + 330, y, { align: 'right' });
+    doc.text('PRECIO', marginX + 400, y, { align: 'right' });
+    doc.text('SUBTOTAL', pageW - marginX, y, { align: 'right' });
+    doc.setTextColor(0);
+    y += 10;
+
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+    f.libros.forEach(l => {
+      const desc = doc.splitTextToSize(l.desc, 240);
+      saltarPaginaSiFalta(desc.length * 11 + 6);
+      doc.text(desc, marginX, y);
+      doc.text(l.grado || l.grade || '', marginX + 250, y);
+      doc.text(String(l.qty), marginX + 330, y, { align: 'right' });
+      doc.text('$' + l.usd.toFixed(2), marginX + 400, y, { align: 'right' });
+      doc.text('$' + l.subtotal.toFixed(2), pageW - marginX, y, { align: 'right' });
+      y += desc.length * 11 + 6;
+    });
+
+    granTotal += f.total;
+    y += 6;
+  });
+
+  saltarPaginaSiFalta(30);
+  doc.setDrawColor(26, 39, 68); doc.setLineWidth(1.2);
+  doc.line(marginX, y, pageW - marginX, y);
+  y += 20;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(26, 39, 68);
+  doc.text('TOTAL PAGADOS: $' + granTotal.toFixed(2), pageW - marginX, y, { align: 'right' });
+
+  const hoy = new Date().toISOString().slice(0, 10);
+  doc.save('pedidos-pagados-' + hoy + '.pdf');
 }
 
 // ── MODO SELECCIÓN / ACCIONES EN LOTE ─────────────────────────

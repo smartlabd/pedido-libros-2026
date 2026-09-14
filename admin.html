@@ -176,6 +176,22 @@
   .btn-pdf:disabled{opacity:0.5;cursor:not-allowed;}
   .btn-pdf-familia{padding:3px 10px;font-size:11px;font-weight:700;font-family:inherit;border:1.5px solid var(--gray-200);border-radius:8px;background:white;color:var(--navy);cursor:pointer;}
   .btn-pdf-familia:hover{background:var(--gold-light);border-color:var(--gold);}
+  .btn-pdf-familia:disabled{opacity:0.4;cursor:not-allowed;}
+  .btn-pdf-familia:disabled:hover{background:white;border-color:var(--gray-200);}
+
+  /* EDITAR DATOS MODAL */
+  #editar-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:600;align-items:center;justify-content:center;padding:24px;}
+  #editar-modal.active{display:flex;}
+  .editar-box{background:white;border-radius:16px;padding:28px 24px;width:100%;max-width:400px;text-align:left;}
+  .editar-box h3{font-size:17px;font-weight:700;color:var(--navy);margin-bottom:4px;}
+  .editar-box .editar-familia-nombre{font-size:13px;color:var(--gray-400);margin-bottom:20px;}
+  .editar-label{font-size:12px;font-weight:600;color:var(--gray-600);display:block;margin-bottom:5px;}
+  .editar-input{width:100%;padding:10px 12px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:14px;font-family:inherit;margin-bottom:16px;background:var(--gray-100);}
+  .editar-input:focus{outline:none;border-color:var(--navy);background:white;}
+  .editar-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;}
+  .btn-guardar-editar{padding:12px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;}
+  .btn-guardar-editar:hover{background:var(--navy-light);}
+  .btn-guardar-editar:disabled{background:var(--gray-200);color:var(--gray-400);cursor:not-allowed;}
   .fam-check{width:18px;height:18px;accent-color:var(--navy);cursor:pointer;flex-shrink:0;}
   .familia-header.selectable{grid-template-columns:auto 1fr auto auto;}
 
@@ -308,6 +324,22 @@
     <button class="bulk-set" onclick="bulkSetEstado('Pagado')">→ Pagado</button>
     <button class="bulk-set" onclick="bulkSetEstado('Entregado')">→ Entregado</button>
     <button class="bulk-del" onclick="openBulkDeleteModal()">🗑️ Eliminar</button>
+  </div>
+</div>
+
+<!-- EDITAR DATOS DE CONTACTO -->
+<div id="editar-modal">
+  <div class="editar-box">
+    <h3>Editar datos de contacto</h3>
+    <div class="editar-familia-nombre" id="editar-familia-nombre"></div>
+    <label class="editar-label" for="editar-telefono">Teléfono</label>
+    <input type="text" id="editar-telefono" class="editar-input" placeholder="+58 414 1234567">
+    <label class="editar-label" for="editar-email">Email</label>
+    <input type="email" id="editar-email" class="editar-input" placeholder="familia@correo.com">
+    <div class="editar-actions">
+      <button class="btn-cancel-del" onclick="closeEditModal()">Cancelar</button>
+      <button class="btn-guardar-editar" id="btn-confirm-editar" onclick="guardarEdicion()">Guardar</button>
+    </div>
   </div>
 </div>
 
@@ -533,7 +565,9 @@ function renderFamilias() {
               <select class="estado-select" onclick="event.stopPropagation()" onchange="changeEstado('${na}', this.value)">
                 ${ESTADOS.map(e => `<option ${e === estado ? 'selected' : ''}>${e}</option>`).join('')}
               </select>
-              <button class="btn-pdf-familia" onclick="event.stopPropagation();generarPDFFamilia(${i})" title="Descargar PDF de este pedido">📄 PDF</button>
+              <button class="btn-pdf-familia" onclick="event.stopPropagation();descargarPDFFamilia(${i})" title="Descargar PDF de este pedido">📄 PDF</button>
+              <button class="btn-pdf-familia" onclick="event.stopPropagation();enviarPDFFamiliaPorEmail(${i})" title="${f.email ? 'Enviar PDF por email a ' + f.email : 'Esta familia no tiene email registrado'}" ${f.email ? '' : 'disabled'}>📧 Enviar</button>
+              <button class="btn-pdf-familia" onclick="event.stopPropagation();openEditModal(${i})" title="Editar teléfono / email">✏️ Editar</button>
             </div>
           </div>
           <div class="familia-total" id="ftotal-${i}">$${f.total.toFixed(2)}</div>
@@ -666,14 +700,8 @@ function generarPDFPagados() {
 }
 
 // ── PDF DE UN PEDIDO INDIVIDUAL (cualquier estado) ─────────────
-function generarPDFFamilia(idx) {
-  const f = allData.familias[idx];
-  if (!f) return;
-  if (!window.jspdf) {
-    alert('No se pudo cargar el generador de PDF. Revisá tu conexión e intentá de nuevo.');
-    return;
-  }
-
+// Arma el documento (lo usan tanto la descarga como el envío por email)
+function construirDocFamilia(f) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'pt', format: 'letter' });
   const pageW = doc.internal.pageSize.getWidth();
@@ -736,10 +764,122 @@ function generarPDFFamilia(idx) {
   doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(26, 39, 68);
   doc.text('TOTAL: $' + f.total.toFixed(2), pageW - marginX, y, { align: 'right' });
 
-  const hoy = new Date().toISOString().slice(0, 10);
-  const nombreArchivo = 'pedido-' + f.nombre.replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase() + '-' + hoy + '.pdf';
-  doc.save(nombreArchivo);
+  return doc;
 }
+
+function nombreArchivoPedido(f) {
+  const hoy = new Date().toISOString().slice(0, 10);
+  return 'pedido-' + f.nombre.replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase() + '-' + hoy + '.pdf';
+}
+
+function descargarPDFFamilia(idx) {
+  const f = allData.familias[idx];
+  if (!f) return;
+  if (!window.jspdf) {
+    alert('No se pudo cargar el generador de PDF. Revisá tu conexión e intentá de nuevo.');
+    return;
+  }
+  construirDocFamilia(f).save(nombreArchivoPedido(f));
+}
+
+// ── ENVIAR EL PDF DE UN PEDIDO POR EMAIL ──────────────────────
+function bytesToBase64(bytes) {
+  let binary = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
+
+async function enviarPDFFamiliaPorEmail(idx) {
+  const f = allData.familias[idx];
+  if (!f) return;
+  if (!f.email) {
+    alert('Esta familia no tiene un email registrado. Usá "✏️ Editar" para agregarlo.');
+    return;
+  }
+  if (!window.jspdf) {
+    alert('No se pudo cargar el generador de PDF. Revisá tu conexión e intentá de nuevo.');
+    return;
+  }
+  if (!confirm(`¿Enviar el PDF de este pedido a ${f.email}?`)) return;
+
+  try {
+    const pdfBytes = new Uint8Array(construirDocFamilia(f).output('arraybuffer'));
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'enviarPedidoEmail',
+        clave: claveAdmin,
+        nombre: f.nombre,
+        email: f.email,
+        pdfBase64: bytesToBase64(pdfBytes),
+      }),
+    });
+    const d = await res.json();
+    if (!d.ok) throw new Error(d.error || 'Error desconocido');
+    alert('Enviado a ' + f.email);
+  } catch(err) {
+    alert('No se pudo enviar: ' + err.message);
+  }
+}
+
+// ── EDITAR TELÉFONO / EMAIL DE UNA FAMILIA ────────────────────
+let editarIdx = null;
+
+function openEditModal(idx) {
+  const f = allData.familias[idx];
+  if (!f) return;
+  editarIdx = idx;
+  document.getElementById('editar-familia-nombre').textContent = f.nombre;
+  document.getElementById('editar-telefono').value = f.telefono || '';
+  document.getElementById('editar-email').value = f.email || '';
+  document.getElementById('editar-modal').classList.add('active');
+}
+
+function closeEditModal() {
+  document.getElementById('editar-modal').classList.remove('active');
+  editarIdx = null;
+}
+
+async function guardarEdicion() {
+  if (editarIdx === null) return;
+  const f = allData.familias[editarIdx];
+  if (!f) return;
+  const telefono = document.getElementById('editar-telefono').value.trim();
+  const email = document.getElementById('editar-email').value.trim();
+
+  const btn = document.getElementById('btn-confirm-editar');
+  btn.disabled = true;
+  btn.textContent = 'Guardando…';
+
+  try {
+    const url = APPS_SCRIPT_URL + '?action=actualizarDatos' +
+      '&clave=' + encodeURIComponent(claveAdmin) +
+      '&familia=' + encodeURIComponent(f.nombre) +
+      '&telefono=' + encodeURIComponent(telefono) +
+      '&email=' + encodeURIComponent(email);
+    const r = await fetch(url);
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'Error desconocido');
+
+    f.telefono = telefono;
+    f.email = email;
+    closeEditModal();
+    renderFamilias();
+  } catch(err) {
+    alert('No se pudo guardar: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Guardar';
+  }
+}
+
+// Cerrar modal de edición al hacer clic en el fondo
+document.getElementById('editar-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeEditModal();
+});
 
 // ── MODO SELECCIÓN / ACCIONES EN LOTE ─────────────────────────
 function toggleSelectMode() {

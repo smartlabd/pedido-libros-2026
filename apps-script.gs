@@ -22,6 +22,7 @@ const CLAVE_ADMIN        = 'libros2026'; // Cambia esto por tu contraseña
 const ESTADOS_VALIDOS    = ['Pendiente', 'Pagado', 'Entregado'];
 const ESTADO_POR_DEFECTO = 'Pendiente';
 const COL_ESTADO         = 10; // columna J
+const COL_EMAIL          = 11; // columna K
 
 // Repositorio de GitHub Pages donde vive el catálogo (index.html)
 const GH_OWNER  = 'smartlabd';
@@ -125,6 +126,29 @@ function doGet(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
   }
+
+  // Corregir teléfono/email de una familia
+  if (action === 'actualizarDatos') {
+    const clave = e.parameter.clave || '';
+    if (clave !== CLAVE_ADMIN) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: false, error: 'Acceso no autorizado' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    try {
+      const familia  = e.parameter.familia;
+      const telefono = e.parameter.telefono || '';
+      const email    = e.parameter.email || '';
+      const result   = actualizarDatosFamilia(familia, telefono, email);
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: true, ...result }))
+        .setMimeType(ContentService.MimeType.JSON);
+    } catch(err) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: false, error: err.message }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+  }
 }
 
 // ------------------------------------------------------------
@@ -137,6 +161,11 @@ function doPost(e) {
     // Publicar el catálogo con precios nuevos (desde actualizar-precios.html)
     if (data.action === 'publicarIndexHtml') {
       return manejarPublicarIndexHtml(data);
+    }
+
+    // Enviar el PDF de un pedido por email (desde el panel admin)
+    if (data.action === 'enviarPedidoEmail') {
+      return manejarEnviarPedidoEmail(data);
     }
 
     // Caso normal: pedido enviado desde el formulario
@@ -223,6 +252,79 @@ function publicarIndexHtmlEnGitHub(htmlNuevo) {
 }
 
 // ------------------------------------------------------------
+// ENVIAR EL PDF DE UN PEDIDO POR EMAIL (generado en el navegador)
+// ------------------------------------------------------------
+function manejarEnviarPedidoEmail(data) {
+  if ((data.clave || '') !== CLAVE_ADMIN) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: 'Acceso no autorizado' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  try {
+    if (!data.email) throw new Error('Falta el email de la familia');
+    if (!data.pdfBase64) throw new Error('Falta el PDF adjunto');
+
+    const nombreArchivo = 'pedido-' + String(data.nombre || 'familia').replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase() + '.pdf';
+    const pdfBlob = Utilities.newBlob(Utilities.base64Decode(data.pdfBase64), 'application/pdf', nombreArchivo);
+    const primerNombre = String(data.nombre || '').split(' ')[0];
+
+    MailApp.sendEmail({
+      to: data.email,
+      subject: '📚 Tu pedido de libros — ' + data.nombre,
+      body:
+        'Hola ' + primerNombre + ',\n\n' +
+        'Te adjuntamos el detalle de tu pedido de libros en PDF.\n\n' +
+        'Gracias,\nEl equipo',
+      attachments: [pdfBlob],
+    });
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch(err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// ------------------------------------------------------------
+// CORREGIR TELÉFONO / EMAIL DE UNA FAMILIA
+// (el nombre NO es editable: es la clave que usa todo el sistema
+// para identificar las filas de un pedido)
+// ------------------------------------------------------------
+function actualizarDatosFamilia(nombreActual, telefonoNuevo, emailNuevo) {
+  const ss    = SpreadsheetApp.openById('1eZDkyjuHYCA0XByAxlx2hUcPetneWrJTl_I74rQP7bU');
+  const sheet = ss.getSheetByName(NOMBRE_HOJA);
+  if (!sheet) throw new Error('Hoja no encontrada');
+  asegurarColumnaEmail(sheet);
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) throw new Error('No hay datos');
+
+  const objetivo   = String(nombreActual).trim();
+  const nFilas     = lastRow - 1;
+  const columnaFam = sheet.getRange(2, 2, nFilas, 1).getValues();
+  const columnaTel = sheet.getRange(2, 3, nFilas, 1).getValues();
+  const columnaMail = sheet.getRange(2, COL_EMAIL, nFilas, 1).getValues();
+
+  let actualizadas = 0;
+  for (let i = 0; i < columnaFam.length; i++) {
+    if (nombreFamiliaPlano_(columnaFam[i][0]) === objetivo) {
+      columnaTel[i][0]  = "'" + telefonoNuevo;
+      columnaMail[i][0] = emailNuevo;
+      actualizadas++;
+    }
+  }
+  if (actualizadas === 0) throw new Error('No se encontraron filas para esa familia');
+
+  sheet.getRange(2, 3, nFilas, 1).setValues(columnaTel);
+  sheet.getRange(2, COL_EMAIL, nFilas, 1).setValues(columnaMail);
+
+  return { familia: nombreActual, filasActualizadas: actualizadas };
+}
+
+// ------------------------------------------------------------
 // GUARDAR PEDIDO
 // ------------------------------------------------------------
 function guardarPedido(data) {
@@ -231,27 +333,28 @@ function guardarPedido(data) {
 
   if (!sheet) {
     sheet = ss.insertSheet(NOMBRE_HOJA);
-    sheet.appendRow(['Fecha','Familia','Teléfono','Ref','Grado','Descripción','Cantidad','Precio USD','Subtotal USD','Estado']);
-    sheet.getRange(1,1,1,10).setFontWeight('bold').setBackground('#1a2744').setFontColor('#ffffff');
+    sheet.appendRow(['Fecha','Familia','Teléfono','Ref','Grado','Descripción','Cantidad','Precio USD','Subtotal USD','Estado','Email']);
+    sheet.getRange(1,1,1,11).setFontWeight('bold').setBackground('#1a2744').setFontColor('#ffffff');
     sheet.setFrozenRows(1);
-    sheet.setColumnWidths(1, 10, 120);
+    sheet.setColumnWidths(1, 11, 120);
     sheet.setColumnWidth(6, 320);
   }
   asegurarColumnaEstado(sheet);
+  asegurarColumnaEmail(sheet);
 
   data.libros.forEach(libro => {
     sheet.appendRow([
       data.fecha, data.nombre, "'" + data.telefono,
       libro.ref, libro.grade, libro.desc,
-      libro.qty, parseFloat(libro.usd), parseFloat(libro.subtotal), ESTADO_POR_DEFECTO
+      libro.qty, parseFloat(libro.usd), parseFloat(libro.subtotal), ESTADO_POR_DEFECTO, data.email || ''
     ]);
   });
 
   // Fila de total de familia
-  const totalRow = ['', '★ ' + data.nombre, "'" + data.telefono, '', '', 'TOTAL FAMILIA', '', '', parseFloat(data.total), ESTADO_POR_DEFECTO];
+  const totalRow = ['', '★ ' + data.nombre, "'" + data.telefono, '', '', 'TOTAL FAMILIA', '', '', parseFloat(data.total), ESTADO_POR_DEFECTO, data.email || ''];
   sheet.appendRow(totalRow);
   const lr = sheet.getLastRow();
-  sheet.getRange(lr, 1, 1, 10).setBackground('#f5e6c8').setFontWeight('bold');
+  sheet.getRange(lr, 1, 1, 11).setBackground('#f5e6c8').setFontWeight('bold');
 }
 
 // ------------------------------------------------------------
@@ -266,6 +369,17 @@ function asegurarColumnaEstado(sheet) {
 }
 
 // ------------------------------------------------------------
+// ASEGURAR COLUMNA "Email" (migración suave de hojas viejas)
+// ------------------------------------------------------------
+function asegurarColumnaEmail(sheet) {
+  const encabezado = String(sheet.getRange(1, COL_EMAIL).getValue()).trim();
+  if (encabezado !== 'Email') {
+    sheet.getRange(1, COL_EMAIL).setValue('Email')
+      .setFontWeight('bold').setBackground('#1a2744').setFontColor('#ffffff');
+  }
+}
+
+// ------------------------------------------------------------
 // LEER DATOS PARA EL PANEL ADMIN
 // ------------------------------------------------------------
 function obtenerDatos() {
@@ -275,14 +389,15 @@ function obtenerDatos() {
     return { familias: [], libros: [], totalGlobal: 0 };
   }
   asegurarColumnaEstado(sheet);
+  asegurarColumnaEmail(sheet);
 
-  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 10).getValues();
+  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 11).getValues();
 
-  const familiasMap = {};   // nombre -> { nombre, telefono, fecha, estado, libros[], total }
+  const familiasMap = {};   // nombre -> { nombre, telefono, fecha, estado, email, libros[], total }
   const librosMap   = {};   // ref    -> { ref, grade, desc, qty, total }
 
   rows.forEach(row => {
-    const [fecha, familia, tel, ref, grado, desc, qty, precio, subtotal, estado] = row;
+    const [fecha, familia, tel, ref, grado, desc, qty, precio, subtotal, estado, email] = row;
 
     if (!ref || ref === '') return; // fila de total, skip
 
@@ -291,6 +406,7 @@ function obtenerDatos() {
       familiasMap[familia] = {
         nombre: familia, telefono: tel, fecha: fecha,
         estado: (estado && String(estado).trim()) || ESTADO_POR_DEFECTO,
+        email: (email && String(email).trim()) || '',
         libros: [], total: 0
       };
     }
@@ -593,6 +709,12 @@ function testSetEstado() {
 
 function testDeleteFamilias() {
   const r = eliminarFamilias(JSON.stringify(['Familia Test']));
+  Logger.log(JSON.stringify(r));
+}
+
+// Corré testPedido() primero para tener la "Familia Test" en la hoja.
+function testActualizarDatos() {
+  const r = actualizarDatosFamilia('Familia Test', '+58 414 9999999', 'test@example.com');
   Logger.log(JSON.stringify(r));
 }
 

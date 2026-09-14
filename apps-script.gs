@@ -23,6 +23,12 @@ const ESTADOS_VALIDOS    = ['Pendiente', 'Pagado', 'Entregado'];
 const ESTADO_POR_DEFECTO = 'Pendiente';
 const COL_ESTADO         = 10; // columna J
 
+// Repositorio de GitHub Pages donde vive el catálogo (index.html)
+const GH_OWNER  = 'smartlabd';
+const GH_REPO   = 'pedido-libros-2026';
+const GH_BRANCH = 'main';
+const GH_PATH   = 'index.html';
+
 // ------------------------------------------------------------
 // GET — panel admin o ping
 // ------------------------------------------------------------
@@ -127,6 +133,13 @@ function doGet(e) {
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
+
+    // Publicar el catálogo con precios nuevos (desde actualizar-precios.html)
+    if (data.action === 'publicarIndexHtml') {
+      return manejarPublicarIndexHtml(data);
+    }
+
+    // Caso normal: pedido enviado desde el formulario
     guardarPedido(data);
     enviarNotificacion(data);
     return ContentService
@@ -137,6 +150,76 @@ function doPost(e) {
       .createTextOutput(JSON.stringify({ ok: false, error: err.message }))
       .setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+// ------------------------------------------------------------
+// PUBLICAR index.html ACTUALIZADO EN GITHUB
+// ------------------------------------------------------------
+function manejarPublicarIndexHtml(data) {
+  if ((data.clave || '') !== CLAVE_ADMIN) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: 'Acceso no autorizado' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  try {
+    const resultado = publicarIndexHtmlEnGitHub(data.html);
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: true, ...resultado }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch(err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function publicarIndexHtmlEnGitHub(htmlNuevo) {
+  if (!htmlNuevo || typeof htmlNuevo !== 'string' || htmlNuevo.indexOf('const BOOKS = ') === -1) {
+    throw new Error('El contenido recibido no parece un index.html válido.');
+  }
+
+  const token = PropertiesService.getScriptProperties().getProperty('GITHUB_TOKEN');
+  if (!token) {
+    throw new Error('Falta configurar GITHUB_TOKEN en Propiedades del script (Configuración del proyecto → Propiedades del script).');
+  }
+
+  const apiUrl = 'https://api.github.com/repos/' + GH_OWNER + '/' + GH_REPO + '/contents/' + GH_PATH;
+  const headersComunes = {
+    Authorization: 'Bearer ' + token,
+    Accept: 'application/vnd.github+json',
+  };
+
+  // 1) Sha actual del archivo (lo exige GitHub para no pisar cambios ajenos)
+  const shaResp = UrlFetchApp.fetch(apiUrl + '?ref=' + GH_BRANCH, {
+    headers: headersComunes,
+    muteHttpExceptions: true,
+  });
+  if (shaResp.getResponseCode() !== 200) {
+    throw new Error('No se pudo leer el archivo actual de GitHub (HTTP ' + shaResp.getResponseCode() + '): ' + shaResp.getContentText());
+  }
+  const shaActual = JSON.parse(shaResp.getContentText()).sha;
+
+  // 2) Subir el contenido nuevo
+  const contenidoB64 = Utilities.base64Encode(Utilities.newBlob(htmlNuevo, 'text/html').getBytes());
+  const putResp = UrlFetchApp.fetch(apiUrl, {
+    method: 'put',
+    headers: headersComunes,
+    contentType: 'application/json',
+    payload: JSON.stringify({
+      message: 'Actualizar precios del catálogo (vía actualizar-precios.html)',
+      content: contenidoB64,
+      sha: shaActual,
+      branch: GH_BRANCH,
+    }),
+    muteHttpExceptions: true,
+  });
+  const codigoPut = putResp.getResponseCode();
+  if (codigoPut < 200 || codigoPut >= 300) {
+    throw new Error('GitHub rechazó la publicación (HTTP ' + codigoPut + '): ' + putResp.getContentText());
+  }
+
+  const commit = JSON.parse(putResp.getContentText()).commit;
+  return { commitUrl: commit.html_url, commitSha: commit.sha };
 }
 
 // ------------------------------------------------------------
@@ -511,4 +594,11 @@ function testSetEstado() {
 function testDeleteFamilias() {
   const r = eliminarFamilias(JSON.stringify(['Familia Test']));
   Logger.log(JSON.stringify(r));
+}
+
+// Corré esta función después de guardar GITHUB_TOKEN en Propiedades del
+// script, para confirmar que quedó bien guardado (no publica nada).
+function testGithubToken() {
+  const token = PropertiesService.getScriptProperties().getProperty('GITHUB_TOKEN');
+  Logger.log(token ? 'Token configurado, empieza con: ' + token.slice(0, 15) + '…' : 'NO hay ningún GITHUB_TOKEN configurado todavía.');
 }

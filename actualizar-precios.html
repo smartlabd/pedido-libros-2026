@@ -187,31 +187,22 @@
 
   <!-- PASO 4: PUBLICAR DIRECTO (OPCIONAL) -->
   <div class="card" id="card-4">
-    <h2><span class="step-num">4</span> Publicar directamente en el sitio (opcional)</h2>
+    <h2><span class="step-num">4</span> Publicar directamente en el sitio</h2>
     <div class="hint">
-      Con esto el botón de abajo aplica los cambios él solo — no hace falta descargar nada ni mandarme el archivo.
-      Necesita un token de acceso de tu cuenta de GitHub, que pegás acá cada vez que lo uses
-      (esta página <b>no lo guarda</b> en ningún lado — ni en el navegador ni en el archivo).
-      <a href="#" onclick="document.getElementById('token-help').classList.toggle('show');return false;">¿Cómo lo creo?</a>
-    </div>
-    <div class="msg info" id="token-help" style="line-height:1.7">
-      1. En GitHub: tu foto de perfil (arriba a la derecha) → <b>Settings</b> → en el menú de la izquierda, hasta abajo, <b>Developer settings</b> → <b>Personal access tokens</b> → <b>Fine-grained tokens</b> → <b>Generate new token</b>.<br>
-      2. En <b>Repository access</b> elegí <b>Only select repositories</b> → buscá y marcá <b>smartlabd/pedido-libros-2026</b> (nada más).<br>
-      3. Bajá a <b>Permissions → Repository permissions</b> → buscá <b>Contents</b> → ponelo en <b>Read and write</b>. Todo lo demás dejalo en "No access".<br>
-      4. Elegí una expiración corta (ej. 7 o 30 días) y generá el token — copialo (empieza con <code>github_pat_…</code>). Pegalo abajo.<br>
-      <b>Es como una contraseña de acceso limitado</b> — no lo compartas ni lo pegues en otro sitio. Lo podés revocar en cualquier momento desde esa misma pantalla de GitHub.
+      Escribí la misma contraseña que usás para entrar al <a href="admin.html">panel de pedidos</a> y confirmá.
+      Con eso alcanza — no hace falta descargar nada ni avisarle a nadie.
     </div>
 
     <div class="row">
-      <div class="field">
-        <label>Token de GitHub (se pega cada vez, no queda guardado)</label>
-        <input type="password" id="gh-token" placeholder="github_pat_…" autocomplete="off">
+      <div class="field" style="max-width:280px">
+        <label>Contraseña del panel</label>
+        <input type="password" id="clave-publicar" placeholder="••••••••" autocomplete="off">
       </div>
     </div>
 
     <div class="msg" id="msg-publicar"></div>
 
-    <button class="btn btn-primary" id="btn-publicar" onclick="publicarEnGitHub()" disabled>✅ Confirmar cambios y publicar en GitHub</button>
+    <button class="btn btn-primary" id="btn-publicar" onclick="publicarPrecios()" disabled>✅ Confirmar cambios</button>
   </div>
 
 </div>
@@ -576,23 +567,12 @@ function descargarArchivo() {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
-// ── PUBLICAR DIRECTO EN GITHUB (opcional) ──────────────────────
-// El token se lee del campo en el momento del clic y no se guarda en
-// ningún lado (ni localStorage, ni sessionStorage, ni en este archivo).
-const GH_OWNER = 'smartlabd';
-const GH_REPO = 'pedido-libros-2026';
-const GH_BRANCH = 'main';
-const GH_PATH = 'index.html';
-
-function toBase64Utf8(str) {
-  const bytes = new TextEncoder().encode(str);
-  let binary = '';
-  const CHUNK = 0x8000;
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
-  }
-  return btoa(binary);
-}
+// ── PUBLICAR (vía Apps Script — nunca habla directo con GitHub) ──
+// La contraseña se lee del campo en el momento del clic y no se guarda
+// en ningún lado. El Apps Script es quien tiene el token de GitHub
+// guardado de forma segura (Propiedades del script) y hace la
+// publicación real; esta página nunca ve ese token.
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwOIp9IVoyaWA_GdChcoMDJwtFGI8nLhkKE1s9igWFafl4Fk89E99iBZRkoM45kNJrd/exec';
 
 function setMsgPublicar(texto, tipo) {
   const el = document.getElementById('msg-publicar');
@@ -601,61 +581,42 @@ function setMsgPublicar(texto, tipo) {
   el.innerHTML = texto;
 }
 
-async function mensajeErrorGitHub(res) {
-  let detalle = '';
-  try { const j = await res.json(); detalle = j.message || ''; } catch (e) {}
-  if (res.status === 401) return 'Token inválido o vencido.';
-  if (res.status === 403) return 'El token no tiene permiso de escritura en este repositorio (revisá el paso 3 al crearlo).';
-  if (res.status === 404) return 'No se encontró el repositorio o el archivo — revisá que el token tenga acceso a smartlabd/pedido-libros-2026.';
-  if (res.status === 409) return 'El archivo cambió en GitHub mientras tanto (alguien más lo editó). Recargá esta página y volvé a analizar.';
-  return 'HTTP ' + res.status + (detalle ? ': ' + detalle : '');
-}
-
-async function publicarEnGitHub() {
+async function publicarPrecios() {
   if (!indexHtmlOriginal || !arrRange || !updatedBooks) return;
-  const token = document.getElementById('gh-token').value.trim();
-  if (!token) { alert('Pegá tu token de GitHub primero (ver "¿Cómo lo creo?" arriba).'); return; }
+  const clave = document.getElementById('clave-publicar').value;
+  if (!clave) { alert('Escribí la contraseña del panel primero.'); return; }
 
   const actualizados = diffRows.filter(d => d.estado === 'upd').length;
-  if (!confirm(`Se van a publicar ${actualizados} precio(s) actualizado(s) directo en GitHub (rama ${GH_BRANCH}). ¿Confirmás?`)) return;
+  if (!confirm(`Se van a publicar ${actualizados} precio(s) actualizado(s) en el sitio. ¿Confirmás?`)) return;
 
   const btn = document.getElementById('btn-publicar');
   btn.disabled = true; btn.textContent = 'Publicando…';
   setMsgPublicar('', '');
 
   try {
-    const apiUrl = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_PATH}`;
-    const headers = { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json' };
-
-    const shaRes = await fetch(apiUrl + '?ref=' + GH_BRANCH, { headers });
-    if (!shaRes.ok) throw new Error(await mensajeErrorGitHub(shaRes));
-    const shaData = await shaRes.json();
-
     const nuevoHtml = construirHtmlActualizado();
-    const putRes = await fetch(apiUrl, {
-      method: 'PUT',
-      headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: 'Actualizar precios del catálogo (' + actualizados + ' libro(s)) — via actualizar-precios.html',
-        content: toBase64Utf8(nuevoHtml),
-        sha: shaData.sha,
-        branch: GH_BRANCH,
-      }),
+    // Sin header Content-Type explícito: el navegador usa text/plain para
+    // un body de texto, lo que evita el preflight CORS que Apps Script no
+    // maneja bien con application/json. Apps Script igual lo interpreta
+    // como JSON al hacer JSON.parse(e.postData.contents).
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'publicarIndexHtml', clave, html: nuevoHtml }),
     });
-    if (!putRes.ok) throw new Error(await mensajeErrorGitHub(putRes));
-    const putData = await putRes.json();
+    const d = await res.json();
+    if (!d.ok) throw new Error(d.error || 'Error desconocido');
 
     setMsgPublicar(
-      '✅ Publicado. GitHub Pages va a mostrar el catálogo actualizado en 1-2 minutos. ' +
-      'Commit: <a href="' + putData.commit.html_url + '" target="_blank">' + putData.commit.sha.slice(0, 7) + '</a>',
+      '✅ Publicado. El sitio va a mostrar el catálogo actualizado en 1-2 minutos.' +
+      (d.commitUrl ? ' <a href="' + d.commitUrl + '" target="_blank">Ver el cambio</a>' : ''),
       'ok'
     );
-    document.getElementById('gh-token').value = '';
+    document.getElementById('clave-publicar').value = '';
   } catch (err) {
     setMsgPublicar('❌ No se pudo publicar: ' + err.message, 'err');
   } finally {
     btn.disabled = false;
-    btn.textContent = '✅ Confirmar cambios y publicar en GitHub';
+    btn.textContent = '✅ Confirmar cambios';
   }
 }
 </script>

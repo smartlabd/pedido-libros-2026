@@ -174,6 +174,8 @@
   .btn-pdf{padding:6px 14px;background:white;border:1.5px solid var(--gray-200);border-radius:8px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;color:var(--navy);}
   .btn-pdf:hover{background:var(--gold-light);border-color:var(--gold);}
   .btn-pdf:disabled{opacity:0.5;cursor:not-allowed;}
+  .btn-pdf-familia{padding:3px 10px;font-size:11px;font-weight:700;font-family:inherit;border:1.5px solid var(--gray-200);border-radius:8px;background:white;color:var(--navy);cursor:pointer;}
+  .btn-pdf-familia:hover{background:var(--gold-light);border-color:var(--gold);}
   .fam-check{width:18px;height:18px;accent-color:var(--navy);cursor:pointer;flex-shrink:0;}
   .familia-header.selectable{grid-template-columns:auto 1fr auto auto;}
 
@@ -531,6 +533,7 @@ function renderFamilias() {
               <select class="estado-select" onclick="event.stopPropagation()" onchange="changeEstado('${na}', this.value)">
                 ${ESTADOS.map(e => `<option ${e === estado ? 'selected' : ''}>${e}</option>`).join('')}
               </select>
+              <button class="btn-pdf-familia" onclick="event.stopPropagation();generarPDFFamilia(${i})" title="Descargar PDF de este pedido">📄 PDF</button>
             </div>
           </div>
           <div class="familia-total" id="ftotal-${i}">$${f.total.toFixed(2)}</div>
@@ -660,6 +663,82 @@ function generarPDFPagados() {
 
   const hoy = new Date().toISOString().slice(0, 10);
   doc.save('pedidos-pagados-' + hoy + '.pdf');
+}
+
+// ── PDF DE UN PEDIDO INDIVIDUAL (cualquier estado) ─────────────
+function generarPDFFamilia(idx) {
+  const f = allData.familias[idx];
+  if (!f) return;
+  if (!window.jspdf) {
+    alert('No se pudo cargar el generador de PDF. Revisá tu conexión e intentá de nuevo.');
+    return;
+  }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const marginX = 40;
+  const marginBottom = 44;
+  let y = 50;
+
+  function saltarPaginaSiFalta(alturaNecesaria) {
+    if (y + alturaNecesaria > pageH - marginBottom) {
+      doc.addPage();
+      y = 50;
+    }
+  }
+
+  const estado = f.estado || 'Pendiente';
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(26, 39, 68);
+  doc.text('Pedido de Libros — Catálogo Escolar 2026', marginX, y);
+  y += 24;
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(0);
+  doc.text(f.nombre, marginX, y);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(120);
+  doc.text(estado.toUpperCase(), pageW - marginX, y, { align: 'right' });
+  doc.setTextColor(0);
+  y += 15;
+
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(90);
+  doc.text((f.telefono || '') + '   ·   ' + (f.fecha || ''), marginX, y);
+  doc.setTextColor(0);
+  y += 22;
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(140);
+  doc.text('LIBRO', marginX, y);
+  doc.text('GRADO', marginX + 250, y);
+  doc.text('CANT.', marginX + 330, y, { align: 'right' });
+  doc.text('PRECIO', marginX + 400, y, { align: 'right' });
+  doc.text('SUBTOTAL', pageW - marginX, y, { align: 'right' });
+  doc.setTextColor(0);
+  y += 10;
+
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+  f.libros.forEach(l => {
+    const desc = doc.splitTextToSize(l.desc, 240);
+    saltarPaginaSiFalta(desc.length * 11 + 6);
+    doc.text(desc, marginX, y);
+    doc.text(l.grado || l.grade || '', marginX + 250, y);
+    doc.text(String(l.qty), marginX + 330, y, { align: 'right' });
+    doc.text('$' + l.usd.toFixed(2), marginX + 400, y, { align: 'right' });
+    doc.text('$' + l.subtotal.toFixed(2), pageW - marginX, y, { align: 'right' });
+    y += desc.length * 11 + 6;
+  });
+
+  y += 10;
+  saltarPaginaSiFalta(30);
+  doc.setDrawColor(26, 39, 68); doc.setLineWidth(1.2);
+  doc.line(marginX, y, pageW - marginX, y);
+  y += 20;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(26, 39, 68);
+  doc.text('TOTAL: $' + f.total.toFixed(2), pageW - marginX, y, { align: 'right' });
+
+  const hoy = new Date().toISOString().slice(0, 10);
+  const nombreArchivo = 'pedido-' + f.nombre.replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase() + '-' + hoy + '.pdf';
+  doc.save(nombreArchivo);
 }
 
 // ── MODO SELECCIÓN / ACCIONES EN LOTE ─────────────────────────

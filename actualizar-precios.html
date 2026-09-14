@@ -33,7 +33,7 @@
   .row{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;}
   .field{display:flex;flex-direction:column;gap:5px;min-width:220px;flex:1;}
   .field label{font-size:12px;font-weight:600;color:var(--gray-600);}
-  select, .field input[type="text"]{padding:9px 11px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:13px;font-family:inherit;background:var(--gray-100);}
+  select, .field input[type="text"], .field input[type="number"]{padding:9px 11px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:13px;font-family:inherit;background:var(--gray-100);}
   select:focus{outline:none;border-color:var(--navy);background:white;}
   .checkbox-row{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--gray-600);margin-bottom:14px;}
   .checkbox-row input{width:16px;height:16px;accent-color:var(--navy);}
@@ -126,9 +126,15 @@
       </div>
     </div>
 
-    <div class="checkbox-row">
-      <input type="checkbox" id="chk-header" checked>
-      <label for="chk-header">La primera fila es encabezado (no es un libro)</label>
+    <div class="row" style="align-items:flex-end">
+      <div class="field" style="max-width:280px">
+        <label>Fila del encabezado (0 = el archivo no tiene)</label>
+        <input type="number" id="num-header-row" min="0" value="1">
+      </div>
+      <div class="hint" style="margin:0 0 12px">
+        Los libros se toman de todas las filas después de esta. Filas vacías o de título se ignoran solas.
+        La detectamos automáticamente, pero corregila si la marca 🏷 no cae sobre el encabezado real (mirá la vista previa).
+      </div>
     </div>
 
     <div class="preview-wrap">
@@ -197,6 +203,11 @@ let filtroActivo = 'todos';
 function normalizarRef(v) {
   let s = String(v == null ? '' : v).trim();
   if (/^\d+\.0$/.test(s)) s = s.slice(0, -2); // Excel a veces guarda "20511.0"
+  // El catálogo usa códigos "11121x13"; algunos proveedores los guardan como
+  // decimal "11121.13" (la "x" se convierte en punto). Normalizamos ambos
+  // al mismo formato para que sí matcheen.
+  const mX = s.match(/^(\d+)x(\d+)$/i);
+  if (mX) return mX[1] + '.' + mX[2];
   return s;
 }
 
@@ -254,13 +265,28 @@ function poblarSelectorHojas() {
 function cargarHoja(nombre) {
   const hoja = workbook.Sheets[nombre];
   sheetRows = XLSX.utils.sheet_to_json(hoja, { header: 1, defval: '' });
+  detectarFilaEncabezado();
   renderMapeoColumnas();
+}
+
+// Busca, entre las primeras filas, cuál tiene más pinta de encabezado
+// (columnas con nombres como "Ref", "Precio", "Descripción", etc.) en vez
+// de asumir siempre que es la fila 1 — muchos Excel traen un título o una
+// fila vacía antes del encabezado real.
+function detectarFilaEncabezado() {
+  const patrones = /ref|c[oó]d|precio|usd|costo|descrip|grado|cantidad/i;
+  let mejorFila = 1, mejorScore = 0;
+  for (let r = 0; r < Math.min(10, sheetRows.length); r++) {
+    const score = (sheetRows[r] || []).filter(c => patrones.test(String(c))).length;
+    if (score > mejorScore) { mejorScore = score; mejorFila = r + 1; }
+  }
+  document.getElementById('num-header-row').value = mejorScore > 0 ? mejorFila : 1;
 }
 
 function renderMapeoColumnas() {
   const nCols = sheetRows.reduce((m, r) => Math.max(m, r.length), 0);
-  const tieneHeader = document.getElementById('chk-header').checked;
-  const headerRow = tieneHeader ? (sheetRows[0] || []) : [];
+  const filaEnc = parseInt(document.getElementById('num-header-row').value, 10) || 0;
+  const headerRow = filaEnc > 0 ? (sheetRows[filaEnc - 1] || []) : [];
 
   const opciones = [];
   for (let c = 0; c < nCols; c++) {
@@ -287,25 +313,32 @@ function renderMapeoColumnas() {
   if (precioPrev !== null) {
     selPrecio.value = precioPrev;
   } else {
-    const idx = headerRow.findIndex(h => /precio|usd|costo/i.test(String(h)));
+    // Preferimos una columna que diga explícitamente "USD" (algunos Excel
+    // traen precio en moneda local Y en USD en columnas separadas).
+    let idx = headerRow.findIndex(h => /usd/i.test(String(h)));
+    if (idx < 0) idx = headerRow.findIndex(h => /precio|costo/i.test(String(h)));
     if (idx >= 0) selPrecio.value = idx;
   }
 
-  renderPreview(nCols);
+  renderPreview(nCols, filaEnc);
 }
 
 document.getElementById('sel-ref').addEventListener('change', function () { this.dataset.userSet = '1'; });
 document.getElementById('sel-precio').addEventListener('change', function () { this.dataset.userSet = '1'; });
+document.getElementById('num-header-row').addEventListener('input', renderMapeoColumnas);
 
-document.getElementById('chk-header').addEventListener('change', renderMapeoColumnas);
-
-function renderPreview(nCols) {
-  const filas = sheetRows.slice(0, 6);
-  let html = '<thead><tr>';
+function renderPreview(nCols, filaEnc) {
+  const filas = sheetRows.slice(0, 10);
+  let html = '<thead><tr><th>Fila</th>';
   for (let c = 0; c < nCols; c++) html += `<th>Col. ${c + 1}</th>`;
   html += '</tr></thead><tbody>';
-  filas.forEach(fila => {
-    html += '<tr>' + Array.from({ length: nCols }, (_, c) => `<td>${fila[c] !== undefined ? fila[c] : ''}</td>`).join('') + '</tr>';
+  filas.forEach((fila, i) => {
+    const numFila = i + 1;
+    const esHeader = numFila === filaEnc;
+    html += `<tr${esHeader ? ' style="background:var(--gold-light);font-weight:700"' : ''}>` +
+      `<td>${numFila}${esHeader ? ' 🏷 encabezado' : ''}</td>` +
+      Array.from({ length: nCols }, (_, c) => `<td>${fila[c] !== undefined ? fila[c] : ''}</td>`).join('') +
+      '</tr>';
   });
   html += '</tbody>';
   document.getElementById('tbl-preview').innerHTML = html;
@@ -318,8 +351,8 @@ function analizar() {
   if (refCol === '' || precioCol === '') { alert('Elegí ambas columnas antes de continuar.'); return; }
   if (refCol === precioCol) { alert('La columna de Ref y la de Precio no pueden ser la misma.'); return; }
 
-  const tieneHeader = document.getElementById('chk-header').checked;
-  const filas = tieneHeader ? sheetRows.slice(1) : sheetRows.slice(0);
+  const filaEnc = parseInt(document.getElementById('num-header-row').value, 10) || 0;
+  const filas = filaEnc > 0 ? sheetRows.slice(filaEnc) : sheetRows.slice(0);
 
   const excelMap = new Map(); // ref normalizado -> precio
   let duplicados = 0, invalidos = 0;
@@ -330,7 +363,9 @@ function analizar() {
     const precio = parsePrecio(fila[precioCol]);
     if (isNaN(precio)) { invalidos++; return; }
     if (excelMap.has(ref)) duplicados++;
-    excelMap.set(ref, precio); // si hay duplicados, gana la última fila
+    // Redondeamos a 2 decimales: precios calculados (ej. Pesos ÷ tasa) suelen
+    // venir con muchos decimales flotantes y el catálogo usa siempre 2.
+    excelMap.set(ref, Math.round(precio * 100) / 100); // si hay duplicados, gana la última fila
   });
 
   window._excelMap = excelMap;

@@ -178,10 +178,7 @@
 
       <div id="excel-refs-extra"></div>
 
-      <div style="margin-top:20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
-        <button class="btn btn-gold" id="btn-descargar" onclick="descargarArchivo()">⬇ Descargar index.html actualizado</button>
-        <span class="hint" style="margin:0">Los libros marcados "sin precio en el Excel" conservan su precio actual — no se borran.</span>
-      </div>
+      <div class="hint" style="margin-top:16px">Los libros marcados "sin precio en el Excel" conservan su precio actual — no se borran.</div>
     </div>
   </div>
 
@@ -520,7 +517,6 @@ function renderResultado(refsExtra) {
   if (avisos.invalidos) extraHtml += `<div class="msg err show">⚠️ ${avisos.invalidos} fila(s) del Excel tenían un precio que no se pudo interpretar como número y se ignoraron.</div>`;
   extraBox.innerHTML = extraHtml;
 
-  document.getElementById('btn-descargar').disabled = false;
   document.getElementById('btn-publicar').disabled = false;
 }
 
@@ -549,22 +545,9 @@ function renderTablaDiff() {
   }).join('') || `<tr><td colspan="6" style="text-align:center;color:var(--gray-400);padding:20px">Sin resultados para este filtro.</td></tr>`;
 }
 
-// ── DESCARGAR index.html ACTUALIZADO ──────────────────────────
+// ── ARMAR EL index.html ACTUALIZADO (lo usa publicarPrecios) ──
 function construirHtmlActualizado() {
   return indexHtmlOriginal.slice(0, arrRange.start) + JSON.stringify(updatedBooks) + indexHtmlOriginal.slice(arrRange.end);
-}
-
-function descargarArchivo() {
-  if (!indexHtmlOriginal || !arrRange || !updatedBooks) return;
-  const blob = new Blob([construirHtmlActualizado()], { type: 'text/html' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'index.html';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
 // ── PUBLICAR (vía Apps Script — nunca habla directo con GitHub) ──

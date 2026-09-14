@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Actualizar precios del catálogo</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0;}
+  :root{
+    --navy:#1a2744;--navy-light:#243359;--gold:#c8922a;--gold-light:#fdf3e0;
+    --cream:#f8f7f4;--white:#fff;
+    --gray-100:#f3f4f6;--gray-200:#e5e7eb;--gray-400:#9ca3af;--gray-600:#4b5563;--gray-800:#1f2937;
+    --green:#16a34a;--green-light:#dcfce7;--red:#dc2626;--red-light:#fee2e2;
+    --blue:#2563eb;--blue-light:#dbeafe;
+  }
+  body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--gray-800);min-height:100vh;}
+
+  header{background:var(--navy);padding:20px 24px;color:white;}
+  header h1{font-size:18px;font-weight:700;}
+  header p{font-size:13px;color:rgba(255,255,255,0.6);margin-top:2px;}
+  header a{color:var(--gold);text-decoration:none;font-size:12px;font-weight:600;}
+
+  .content{max-width:920px;margin:0 auto;padding:28px 20px 60px;}
+
+  .card{background:white;border:1px solid var(--gray-200);border-radius:12px;padding:22px 24px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,0.04);}
+  .card.disabled{opacity:0.45;pointer-events:none;}
+  .card h2{font-size:15px;font-weight:700;color:var(--navy);margin-bottom:4px;display:flex;align-items:center;gap:8px;}
+  .card h2 .step-num{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--navy);color:white;font-size:12px;}
+  .card .hint{font-size:12px;color:var(--gray-400);margin-bottom:16px;}
+
+  input[type="file"]{font-family:inherit;font-size:13px;}
+  .row{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;}
+  .field{display:flex;flex-direction:column;gap:5px;min-width:220px;flex:1;}
+  .field label{font-size:12px;font-weight:600;color:var(--gray-600);}
+  select, .field input[type="text"]{padding:9px 11px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:13px;font-family:inherit;background:var(--gray-100);}
+  select:focus{outline:none;border-color:var(--navy);background:white;}
+  .checkbox-row{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--gray-600);margin-bottom:14px;}
+  .checkbox-row input{width:16px;height:16px;accent-color:var(--navy);}
+
+  .preview-wrap{overflow-x:auto;border:1px solid var(--gray-200);border-radius:8px;margin-bottom:16px;}
+  table.preview{border-collapse:collapse;width:100%;font-size:12px;}
+  table.preview th,table.preview td{padding:6px 10px;border-bottom:1px solid var(--gray-100);white-space:nowrap;text-align:left;}
+  table.preview th{background:var(--gray-100);color:var(--gray-600);font-weight:600;position:sticky;top:0;}
+  table.preview tr:last-child td{border-bottom:none;}
+
+  .btn{padding:11px 18px;border-radius:9px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;border:none;transition:background .15s;}
+  .btn-primary{background:var(--navy);color:white;}
+  .btn-primary:hover{background:var(--navy-light);}
+  .btn-primary:disabled{background:var(--gray-200);color:var(--gray-400);cursor:not-allowed;}
+  .btn-gold{background:var(--gold);color:var(--navy);}
+  .btn-gold:hover{background:#b5821f;}
+  .btn-gold:disabled{background:var(--gray-200);color:var(--gray-400);cursor:not-allowed;}
+  .btn-link{background:none;color:var(--navy);text-decoration:underline;padding:4px 0;font-size:12px;font-weight:600;}
+
+  .msg{padding:11px 14px;border-radius:8px;font-size:13px;margin-bottom:14px;display:none;}
+  .msg.show{display:block;}
+  .msg.err{background:var(--red-light);color:var(--red);}
+  .msg.ok{background:var(--green-light);color:var(--green);}
+  .msg.info{background:var(--blue-light);color:var(--blue);}
+
+  textarea{width:100%;min-height:140px;font-family:monospace;font-size:11px;padding:10px;border:1.5px solid var(--gray-200);border-radius:8px;background:var(--gray-100);}
+
+  .summary-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;}
+  @media(max-width:700px){.summary-row{grid-template-columns:1fr 1fr;}}
+  .summary-tile{border:1px solid var(--gray-200);border-radius:10px;padding:14px;text-align:center;}
+  .summary-tile .num{font-size:22px;font-weight:800;color:var(--navy);}
+  .summary-tile .lbl{font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-top:2px;}
+  .summary-tile.warn .num{color:#b45309;}
+
+  .filter-pills{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}
+  .fpill{padding:6px 13px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid var(--gray-200);background:white;color:var(--gray-600);}
+  .fpill.active{background:var(--navy);color:white;border-color:var(--navy);}
+
+  table.diff{border-collapse:collapse;width:100%;font-size:12.5px;}
+  table.diff th{background:var(--navy);color:rgba(255,255,255,0.75);font-size:10px;text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;text-align:left;}
+  table.diff th.num,table.diff td.num{text-align:right;}
+  table.diff td{padding:8px 10px;border-bottom:1px solid var(--gray-100);vertical-align:top;}
+  table.diff tr:hover td{background:var(--gray-100);}
+  .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;}
+  .badge.upd{background:var(--gold-light);color:#92610f;}
+  .badge.same{background:var(--gray-100);color:var(--gray-600);}
+  .badge.missing{background:var(--red-light);color:var(--red);}
+  .ref-mono{font-family:monospace;font-size:11px;color:var(--gray-400);}
+  .delta-up{color:var(--red);font-weight:700;}
+  .delta-down{color:var(--green);font-weight:700;}
+
+  #excel-refs-extra{margin-top:16px;}
+  #excel-refs-extra ul{font-size:12px;color:var(--gray-600);padding-left:18px;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>💲 Actualizar precios del catálogo</h1>
+  <p>Herramienta local — no toca el Apps Script ni la Hoja de Google. &nbsp;·&nbsp; <a href="admin.html">← Volver al panel</a></p>
+</header>
+
+<div class="content">
+
+  <!-- PASO 1: SUBIR EXCEL -->
+  <div class="card" id="card-1">
+    <h2><span class="step-num">1</span> Subí el Excel con la lista de precios</h2>
+    <div class="hint">Acepta .xlsx, .xls o .csv. No importa el orden de las columnas: en el paso 2 elegís cuál es cuál.</div>
+    <input type="file" id="file-input" accept=".xlsx,.xls,.csv">
+    <div class="msg err" id="msg-file-error"></div>
+  </div>
+
+  <!-- PASO 2: MAPEAR COLUMNAS -->
+  <div class="card disabled" id="card-2">
+    <h2><span class="step-num">2</span> Indicá qué columna es cuál</h2>
+    <div class="hint">Elegí la hoja (si el archivo tiene varias) y las columnas de referencia y precio. Revisá la vista previa antes de continuar.</div>
+
+    <div class="row">
+      <div class="field" id="field-sheet" style="display:none">
+        <label>Hoja</label>
+        <select id="sel-sheet"></select>
+      </div>
+      <div class="field">
+        <label>Columna con el código (Ref)</label>
+        <select id="sel-ref"></select>
+      </div>
+      <div class="field">
+        <label>Columna con el precio</label>
+        <select id="sel-precio"></select>
+      </div>
+    </div>
+
+    <div class="checkbox-row">
+      <input type="checkbox" id="chk-header" checked>
+      <label for="chk-header">La primera fila es encabezado (no es un libro)</label>
+    </div>
+
+    <div class="preview-wrap">
+      <table class="preview" id="tbl-preview"></table>
+    </div>
+
+    <button class="btn btn-primary" id="btn-analizar" onclick="analizar()">Analizar y comparar con el catálogo actual →</button>
+  </div>
+
+  <!-- PASO 3: REVISIÓN -->
+  <div class="card disabled" id="card-3">
+    <h2><span class="step-num">3</span> Revisá los cambios antes de aplicar</h2>
+
+    <div class="msg err" id="msg-catalogo-error">
+      No se pudo leer <code>index.html</code> automáticamente (¿abriste este archivo directo desde tu computadora en vez del sitio publicado?).
+      Abrí esta herramienta desde <strong>https://smartlabd.github.io/pedido-libros-2026/actualizar-precios.html</strong>, o pegá el contenido manualmente abajo.
+      <div style="margin-top:10px">
+        <textarea id="txt-html-manual" placeholder="Pegá aquí todo el contenido de tu index.html actual…"></textarea>
+      </div>
+      <button class="btn-link" onclick="usarHtmlPegado()">Usar este contenido</button>
+    </div>
+
+    <div id="resultado-analisis" style="display:none">
+      <div class="summary-row">
+        <div class="summary-tile"><div class="num" id="sum-total">0</div><div class="lbl">Libros en catálogo</div></div>
+        <div class="summary-tile"><div class="num" id="sum-actualizados">0</div><div class="lbl">Precios a actualizar</div></div>
+        <div class="summary-tile"><div class="num" id="sum-sincambio">0</div><div class="lbl">Sin cambio</div></div>
+        <div class="summary-tile warn"><div class="num" id="sum-faltantes">0</div><div class="lbl">Sin precio en el Excel</div></div>
+      </div>
+
+      <div class="filter-pills" id="filter-pills"></div>
+
+      <div class="preview-wrap">
+        <table class="diff" id="tbl-diff">
+          <thead>
+            <tr><th>Ref</th><th>Descripción</th><th>Grado</th><th class="num">Precio actual</th><th class="num">Precio nuevo</th><th>Estado</th></tr>
+          </thead>
+          <tbody id="tbl-diff-body"></tbody>
+        </table>
+      </div>
+
+      <div id="excel-refs-extra"></div>
+
+      <div style="margin-top:20px;display:flex;align-items:center;gap:14px;">
+        <button class="btn btn-gold" id="btn-descargar" onclick="descargarArchivo()">⬇ Descargar index.html actualizado</button>
+        <span class="hint" style="margin:0">Los libros marcados "sin precio en el Excel" conservan su precio actual — no se borran.</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+// ── ESTADO ────────────────────────────────────────────────────
+let workbook = null;
+let sheetRows = [];          // filas de la hoja elegida, como array de arrays
+let indexHtmlOriginal = null; // contenido de index.html (fetch o pegado)
+let arrRange = null;          // {start, end} del array BOOKS dentro del html
+let currentBooks = null;      // catálogo actual parseado
+let diffRows = null;          // resultado del análisis
+let updatedBooks = null;      // catálogo con precios nuevos
+let filtroActivo = 'todos';
+
+// ── UTILIDADES ────────────────────────────────────────────────
+function normalizarRef(v) {
+  let s = String(v == null ? '' : v).trim();
+  if (/^\d+\.0$/.test(s)) s = s.slice(0, -2); // Excel a veces guarda "20511.0"
+  return s;
+}
+
+function parsePrecio(v) {
+  if (typeof v === 'number') return v;
+  let s = String(v == null ? '' : v).replace(/[^\d.,-]/g, '').trim();
+  if (!s) return NaN;
+  if (s.includes(',') && s.includes('.')) {
+    s = s.lastIndexOf(',') > s.lastIndexOf('.') ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
+  } else if (s.includes(',')) {
+    s = /,\d{1,2}$/.test(s) ? s.replace(',', '.') : s.replace(/,/g, '');
+  }
+  return parseFloat(s);
+}
+
+function mostrarMsg(id, texto) {
+  const el = document.getElementById(id);
+  if (texto) { el.textContent = texto; el.classList.add('show'); }
+  else { el.classList.remove('show'); }
+}
+
+function habilitarCard(id) { document.getElementById(id).classList.remove('disabled'); }
+
+// ── PASO 1: LEER EXCEL ────────────────────────────────────────
+document.getElementById('file-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  mostrarMsg('msg-file-error', '');
+
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const data = new Uint8Array(ev.target.result);
+      workbook = XLSX.read(data, { type: 'array' });
+      poblarSelectorHojas();
+      cargarHoja(workbook.SheetNames[0]);
+      habilitarCard('card-2');
+    } catch (err) {
+      mostrarMsg('msg-file-error', 'No se pudo leer el archivo: ' + err.message);
+    }
+  };
+  reader.onerror = () => mostrarMsg('msg-file-error', 'No se pudo leer el archivo.');
+  reader.readAsArrayBuffer(file);
+});
+
+function poblarSelectorHojas() {
+  const field = document.getElementById('field-sheet');
+  const sel = document.getElementById('sel-sheet');
+  if (workbook.SheetNames.length <= 1) { field.style.display = 'none'; return; }
+  field.style.display = 'flex';
+  sel.innerHTML = workbook.SheetNames.map(n => `<option value="${n}">${n}</option>`).join('');
+  sel.onchange = () => cargarHoja(sel.value);
+}
+
+function cargarHoja(nombre) {
+  const hoja = workbook.Sheets[nombre];
+  sheetRows = XLSX.utils.sheet_to_json(hoja, { header: 1, defval: '' });
+  renderMapeoColumnas();
+}
+
+function renderMapeoColumnas() {
+  const nCols = sheetRows.reduce((m, r) => Math.max(m, r.length), 0);
+  const tieneHeader = document.getElementById('chk-header').checked;
+  const headerRow = tieneHeader ? (sheetRows[0] || []) : [];
+
+  const opciones = [];
+  for (let c = 0; c < nCols; c++) {
+    const etiqueta = (headerRow[c] !== undefined && String(headerRow[c]).trim() !== '')
+      ? headerRow[c]
+      : 'Columna ' + (c + 1);
+    opciones.push(`<option value="${c}">${etiqueta}</option>`);
+  }
+  const selRef = document.getElementById('sel-ref');
+  const selPrecio = document.getElementById('sel-precio');
+  // Solo se respeta una selección previa si el usuario la eligió a mano;
+  // el valor "0" que deja un <select> recién poblado no cuenta como elección.
+  const refPrev = selRef.dataset.userSet === '1' ? selRef.value : null;
+  const precioPrev = selPrecio.dataset.userSet === '1' ? selPrecio.value : null;
+  selRef.innerHTML = opciones.join('');
+  selPrecio.innerHTML = opciones.join('');
+
+  if (refPrev !== null) {
+    selRef.value = refPrev;
+  } else {
+    const idx = headerRow.findIndex(h => /ref|c[oó]d/i.test(String(h)));
+    if (idx >= 0) selRef.value = idx;
+  }
+  if (precioPrev !== null) {
+    selPrecio.value = precioPrev;
+  } else {
+    const idx = headerRow.findIndex(h => /precio|usd|costo/i.test(String(h)));
+    if (idx >= 0) selPrecio.value = idx;
+  }
+
+  renderPreview(nCols);
+}
+
+document.getElementById('sel-ref').addEventListener('change', function () { this.dataset.userSet = '1'; });
+document.getElementById('sel-precio').addEventListener('change', function () { this.dataset.userSet = '1'; });
+
+document.getElementById('chk-header').addEventListener('change', renderMapeoColumnas);
+
+function renderPreview(nCols) {
+  const filas = sheetRows.slice(0, 6);
+  let html = '<thead><tr>';
+  for (let c = 0; c < nCols; c++) html += `<th>Col. ${c + 1}</th>`;
+  html += '</tr></thead><tbody>';
+  filas.forEach(fila => {
+    html += '<tr>' + Array.from({ length: nCols }, (_, c) => `<td>${fila[c] !== undefined ? fila[c] : ''}</td>`).join('') + '</tr>';
+  });
+  html += '</tbody>';
+  document.getElementById('tbl-preview').innerHTML = html;
+}
+
+// ── PASO 2 → 3: ANALIZAR ─────────────────────────────────────
+function analizar() {
+  const refCol = document.getElementById('sel-ref').value;
+  const precioCol = document.getElementById('sel-precio').value;
+  if (refCol === '' || precioCol === '') { alert('Elegí ambas columnas antes de continuar.'); return; }
+  if (refCol === precioCol) { alert('La columna de Ref y la de Precio no pueden ser la misma.'); return; }
+
+  const tieneHeader = document.getElementById('chk-header').checked;
+  const filas = tieneHeader ? sheetRows.slice(1) : sheetRows.slice(0);
+
+  const excelMap = new Map(); // ref normalizado -> precio
+  let duplicados = 0, invalidos = 0;
+  filas.forEach(fila => {
+    const refRaw = fila[refCol];
+    if (refRaw === undefined || String(refRaw).trim() === '') return;
+    const ref = normalizarRef(refRaw);
+    const precio = parsePrecio(fila[precioCol]);
+    if (isNaN(precio)) { invalidos++; return; }
+    if (excelMap.has(ref)) duplicados++;
+    excelMap.set(ref, precio); // si hay duplicados, gana la última fila
+  });
+
+  window._excelMap = excelMap;
+  window._avisos = { duplicados, invalidos };
+
+  habilitarCard('card-3');
+  cargarCatalogoActual();
+}
+
+// ── CARGAR index.html ACTUAL (fetch, con fallback manual) ─────
+async function cargarCatalogoActual() {
+  mostrarMsg('msg-catalogo-error', '');
+  document.getElementById('msg-catalogo-error').classList.remove('show');
+  try {
+    const res = await fetch('index.html', { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const texto = await res.text();
+    usarHtml(texto);
+  } catch (err) {
+    document.getElementById('msg-catalogo-error').classList.add('show');
+    document.getElementById('resultado-analisis').style.display = 'none';
+  }
+}
+
+function usarHtmlPegado() {
+  const texto = document.getElementById('txt-html-manual').value;
+  if (!texto.trim()) { alert('Pegá el contenido de index.html primero.'); return; }
+  usarHtml(texto);
+}
+
+function usarHtml(texto) {
+  try {
+    const { books, start, end } = extraerRangoBooks(texto);
+    indexHtmlOriginal = texto;
+    arrRange = { start, end };
+    currentBooks = books;
+    document.getElementById('msg-catalogo-error').classList.remove('show');
+    calcularDiff();
+  } catch (err) {
+    document.getElementById('msg-catalogo-error').classList.add('show');
+    mostrarMsg('msg-catalogo-error', 'No pude interpretar el catálogo: ' + err.message);
+  }
+}
+
+function extraerRangoBooks(html) {
+  const marker = 'const BOOKS = ';
+  const start0 = html.indexOf(marker);
+  if (start0 === -1) throw new Error('No se encontró "const BOOKS =" en el archivo.');
+  const start = html.indexOf('[', start0);
+  if (start === -1) throw new Error('No se encontró el array BOOKS.');
+  let depth = 0, inStr = false, i = start;
+  for (; i < html.length; i++) {
+    const c = html[i];
+    if (inStr) {
+      if (c === '\\') { i++; continue; }
+      if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') { inStr = true; continue; }
+    if (c === '[') depth++;
+    else if (c === ']') { depth--; if (depth === 0) { i++; break; } }
+  }
+  const end = i;
+  let books;
+  try { books = JSON.parse(html.slice(start, end)); }
+  catch (e) { throw new Error('el array BOOKS no es JSON válido (' + e.message + ')'); }
+  return { books, start, end };
+}
+
+// ── CALCULAR DIFERENCIAS ──────────────────────────────────────
+function calcularDiff() {
+  const excelMap = window._excelMap;
+  const EPS = 0.001;
+  const usados = new Set();
+
+  diffRows = currentBooks.map(b => {
+    const ref = normalizarRef(b.ref);
+    if (excelMap.has(ref)) {
+      usados.add(ref);
+      const nuevo = excelMap.get(ref);
+      const estado = Math.abs(nuevo - b.usd) < EPS ? 'same' : 'upd';
+      return { ...b, precioNuevo: nuevo, estado };
+    }
+    return { ...b, precioNuevo: null, estado: 'missing' };
+  });
+
+  const refsExtra = [...excelMap.keys()].filter(r => !usados.has(r));
+
+  updatedBooks = currentBooks.map((b, idx) => {
+    const d = diffRows[idx];
+    return d.estado === 'upd' ? { ...b, usd: d.precioNuevo } : b;
+  });
+
+  renderResultado(refsExtra);
+}
+
+function renderResultado(refsExtra) {
+  document.getElementById('resultado-analisis').style.display = 'block';
+
+  const total = diffRows.length;
+  const actualizados = diffRows.filter(d => d.estado === 'upd').length;
+  const sinCambio = diffRows.filter(d => d.estado === 'same').length;
+  const faltantes = diffRows.filter(d => d.estado === 'missing').length;
+
+  document.getElementById('sum-total').textContent = total;
+  document.getElementById('sum-actualizados').textContent = actualizados;
+  document.getElementById('sum-sincambio').textContent = sinCambio;
+  document.getElementById('sum-faltantes').textContent = faltantes;
+
+  const pills = [
+    ['todos', 'Todos', total],
+    ['upd', 'Actualizados', actualizados],
+    ['same', 'Sin cambio', sinCambio],
+    ['missing', 'Sin precio en Excel', faltantes],
+  ];
+  document.getElementById('filter-pills').innerHTML = pills.map(([key, label, n]) =>
+    `<button class="fpill ${key === filtroActivo ? 'active' : ''}" onclick="setFiltro('${key}')">${label} (${n})</button>`
+  ).join('');
+
+  renderTablaDiff();
+
+  const extraBox = document.getElementById('excel-refs-extra');
+  const avisos = window._avisos || {};
+  let extraHtml = '';
+  if (refsExtra.length > 0) {
+    extraHtml += `<div class="msg info show">⚠️ ${refsExtra.length} referencia(s) del Excel no existen en el catálogo actual (no se agregan solas):
+      <ul>${refsExtra.slice(0, 30).map(r => `<li class="ref-mono">${r}</li>`).join('')}</ul>
+      ${refsExtra.length > 30 ? `<div>…y ${refsExtra.length - 30} más.</div>` : ''}
+    </div>`;
+  }
+  if (avisos.duplicados) extraHtml += `<div class="msg info show">ℹ️ Había ${avisos.duplicados} referencia(s) repetidas en el Excel — se usó el precio de la última fila de cada una.</div>`;
+  if (avisos.invalidos) extraHtml += `<div class="msg err show">⚠️ ${avisos.invalidos} fila(s) del Excel tenían un precio que no se pudo interpretar como número y se ignoraron.</div>`;
+  extraBox.innerHTML = extraHtml;
+
+  document.getElementById('btn-descargar').disabled = false;
+}
+
+function setFiltro(key) {
+  filtroActivo = key;
+  document.querySelectorAll('.fpill').forEach((p, i) => p.classList.toggle('active', i === ['todos', 'upd', 'same', 'missing'].indexOf(key)));
+  renderTablaDiff();
+}
+
+function renderTablaDiff() {
+  const filas = filtroActivo === 'todos' ? diffRows : diffRows.filter(d => d.estado === filtroActivo);
+  const badge = { upd: '<span class="badge upd">Actualizado</span>', same: '<span class="badge same">Sin cambio</span>', missing: '<span class="badge missing">Sin Excel</span>' };
+
+  document.getElementById('tbl-diff-body').innerHTML = filas.map(d => {
+    const nuevoTxt = d.precioNuevo == null ? '—' : '$' + d.precioNuevo.toFixed(2);
+    let deltaClass = '';
+    if (d.estado === 'upd') deltaClass = d.precioNuevo > d.usd ? 'delta-up' : 'delta-down';
+    return `<tr>
+      <td class="ref-mono">${d.ref}</td>
+      <td>${d.desc}</td>
+      <td>${d.grade}</td>
+      <td class="num">$${d.usd.toFixed(2)}</td>
+      <td class="num ${deltaClass}">${nuevoTxt}</td>
+      <td>${badge[d.estado]}</td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="6" style="text-align:center;color:var(--gray-400);padding:20px">Sin resultados para este filtro.</td></tr>`;
+}
+
+// ── DESCARGAR index.html ACTUALIZADO ──────────────────────────
+function descargarArchivo() {
+  if (!indexHtmlOriginal || !arrRange || !updatedBooks) return;
+  const nuevoHtml = indexHtmlOriginal.slice(0, arrRange.start) + JSON.stringify(updatedBooks) + indexHtmlOriginal.slice(arrRange.end);
+  const blob = new Blob([nuevoHtml], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'index.html';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+</script>
+</body>
+</html>

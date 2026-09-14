@@ -192,14 +192,130 @@ function manejarPublicarIndexHtml(data) {
   }
   try {
     const resultado = publicarIndexHtmlEnGitHub(data.html);
+
+    // Los pedidos Pendientes todavía no se cobraron: se re-precian con el
+    // catálogo recién publicado. Pagado/Entregado quedan congelados tal
+    // como se cobraron. Si esto falla no bloqueamos la publicación (ya
+    // está en GitHub) pero se informa el error.
+    let repreciado = { filasRepreciadas: 0, familiasRepreciadas: 0 };
+    try {
+      const mapaPrecios = mapaPreciosDesdeHtml_(data.html);
+      repreciado = repreciarPendientes(mapaPrecios);
+    } catch (err2) {
+      repreciado = { filasRepreciadas: 0, familiasRepreciadas: 0, errorRepreciado: err2.message };
+    }
+
     return ContentService
-      .createTextOutput(JSON.stringify({ ok: true, ...resultado }))
+      .createTextOutput(JSON.stringify({ ok: true, ...resultado, ...repreciado }))
       .setMimeType(ContentService.MimeType.JSON);
   } catch(err) {
     return ContentService
       .createTextOutput(JSON.stringify({ ok: false, error: err.message }))
       .setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+// Extrae el array BOOKS de un index.html y arma un mapa ref -> precio USD
+function mapaPreciosDesdeHtml_(html) {
+  const marker = 'const BOOKS = ';
+  const start0 = html.indexOf(marker);
+  if (start0 === -1) throw new Error('No se encontró "const BOOKS =" en el archivo.');
+  const start = html.indexOf('[', start0);
+  let depth = 0, inStr = false, i = start;
+  for (; i < html.length; i++) {
+    const c = html.charAt(i);
+    if (inStr) {
+      if (c === '\\') { i++; continue; }
+      if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') { inStr = true; continue; }
+    if (c === '[') depth++;
+    else if (c === ']') { depth--; if (depth === 0) { i++; break; } }
+  }
+  const books = JSON.parse(html.substring(start, i));
+  const mapa = {};
+  books.forEach(b => { mapa[String(b.ref).trim()] = b.usd; });
+  return mapa;
+}
+
+// ------------------------------------------------------------
+// RE-PRECIAR LOS PEDIDOS EN ESTADO "Pendiente" CON UN CATÁLOGO NUEVO
+// (Pagado/Entregado no se tocan: ya se cobraron a ese precio)
+// ------------------------------------------------------------
+function repreciarPendientes(mapaPrecios) {
+  const ss    = SpreadsheetApp.openById('1eZDkyjuHYCA0XByAxlx2hUcPetneWrJTl_I74rQP7bU');
+  const sheet = ss.getSheetByName(NOMBRE_HOJA);
+  if (!sheet) return { filasRepreciadas: 0, familiasRepreciadas: 0 };
+  asegurarColumnaEstado(sheet);
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { filasRepreciadas: 0, familiasRepreciadas: 0 };
+
+  const nFilas = lastRow - 1;
+  const datos  = sheet.getRange(2, 1, nFilas, 10).getValues(); // columnas A..J
+
+  let filasRepreciadas = 0;
+  const familiasAfectadas = new Set();
+
+  for (let i = 0; i < datos.length; i++) {
+    const ref      = datos[i][3];                                   // D
+    const cantidad = datos[i][6];                                   // G
+    const estado   = (datos[i][9] && String(datos[i][9]).trim()) || ESTADO_POR_DEFECTO; // J
+
+    if (!ref || ref === '') continue; // fila de total, se recalcula después
+    if (estado !== 'Pendiente') continue;
+
+    const refKey = String(ref).trim();
+    if (!Object.prototype.hasOwnProperty.call(mapaPrecios, refKey)) continue;
+
+    const nuevoPrecio   = mapaPrecios[refKey];
+    const nuevoSubtotal = Math.round(nuevoPrecio * (parseInt(cantidad, 10) || 0) * 100) / 100;
+
+    datos[i][7] = nuevoPrecio;    // H: Precio USD
+    datos[i][8] = nuevoSubtotal;  // I: Subtotal USD
+    filasRepreciadas++;
+    familiasAfectadas.add(nombreFamiliaPlano_(datos[i][1]));
+  }
+
+  if (filasRepreciadas > 0) {
+    sheet.getRange(2, 1, nFilas, 10).setValues(datos);
+
+    // Recalcular el total de cada familia afectada, incluida su fila ★ TOTAL
+    familiasAfectadas.forEach(nombre => {
+      let suma = 0;
+      let filaTotalIdx = -1;
+      for (let i = 0; i < datos.length; i++) {
+        const fam = String(datos[i][1]).trim();
+        const ref = datos[i][3];
+        if (fam.charAt(0) === '★' && fam.indexOf(nombre) !== -1) {
+          filaTotalIdx = i;
+        } else if (nombreFamiliaPlano_(fam) === nombre && ref) {
+          suma += parseFloat(datos[i][8]) || 0;
+        }
+      }
+      if (filaTotalIdx !== -1) {
+        sheet.getRange(filaTotalIdx + 2, 9).setValue(Math.round(suma * 100) / 100);
+      }
+    });
+  }
+
+  return { filasRepreciadas: filasRepreciadas, familiasRepreciadas: familiasAfectadas.size };
+}
+
+// Corré esto UNA VEZ desde el editor (▶ Ejecutar) para poner al día, con
+// el catálogo YA publicado, los pedidos Pendientes que quedaron con
+// precio viejo de antes de que existiera el re-precio automático.
+function repreciarPendientesConCatalogoActual() {
+  const url = 'https://smartlabd.github.io/pedido-libros-2026/index.html';
+  const resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+  if (resp.getResponseCode() !== 200) {
+    throw new Error('No se pudo leer el catálogo publicado (HTTP ' + resp.getResponseCode() + ')');
+  }
+  const mapaPrecios = mapaPreciosDesdeHtml_(resp.getContentText());
+  const r = repreciarPendientes(mapaPrecios);
+  Logger.log(JSON.stringify(r));
+  return r;
 }
 
 function publicarIndexHtmlEnGitHub(htmlNuevo) {

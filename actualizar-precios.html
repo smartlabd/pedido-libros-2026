@@ -589,8 +589,15 @@ async function publicarPrecios() {
     const d = await res.json();
     if (!d.ok) throw new Error(d.error || 'Error desconocido');
 
+    let extra = '';
+    if (d.filasRepreciadas) {
+      extra += ` También se actualizó el precio en ${d.filasRepreciadas} línea(s) de ${d.familiasRepreciadas} pedido(s) pendientes.`;
+    }
+    if (d.errorRepreciado) {
+      extra += ` ⚠️ El catálogo se publicó bien, pero no se pudieron re-precian los pendientes: ${d.errorRepreciado}`;
+    }
     setMsgPublicar(
-      '✅ Publicado. El sitio va a mostrar el catálogo actualizado en 1-2 minutos.' +
+      '✅ Publicado. El sitio va a mostrar el catálogo actualizado en 1-2 minutos.' + extra +
       (d.commitUrl ? ' <a href="' + d.commitUrl + '" target="_blank">Ver el cambio</a>' : ''),
       'ok'
     );
